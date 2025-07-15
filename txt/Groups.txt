@@ -1,0 +1,130 @@
+// --- Groups ---
+/**
+ * Creates a new group record.
+ * @param {object} groupData - The data for the new group (name, npi, taxId).
+ * @returns {object} A success or error object.
+ */
+function createGroup(groupData) {
+  try {
+    if (!groupData || !groupData.name) {
+      return { success: false, message: "Group name is required." };
+    }
+    const sheet = getSheet(GROUPS_SHEET_NAME, GROUPS_HEADERS);
+    const newId = Utilities.getUuid();
+    // Headers: ["ID", "Name", "NPI", "Tax ID", "Remit Address (JSON)"]
+    const rowData = [newId, groupData.name, groupData.npi || "", groupData.taxId || "", JSON.stringify({})];
+    sheet.appendRow(rowData);
+    invalidateRowIndexCache(sheet);
+    logAuditEvent("Request", `Group created: ${groupData.name}`, { groupId: newId });
+    return { success: true, message: `Group "${groupData.name}" created with ID: ${newId}` };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to create group: ${error.message}`);
+    return { success: false, message: `Failed to create group: ${error.message}` };
+  }
+}
+
+/**
+ * Retrieves a list of all groups.
+ * @returns {object} An object containing success status and groups data.
+ */
+function listGroups() {
+  try {
+    const sheet = getSheet(GROUPS_SHEET_NAME, GROUPS_HEADERS);
+    const allGroups = sheetDataToObjects(sheet.getDataRange().getValues());
+    return { success: true, data: allGroups };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to list groups: ${error.message}`);
+    return { success: false, message: `Failed to list groups: ${error.message}` };
+  }
+}
+
+/**
+ * Updates an existing group.
+ * @param {object} groupData - The data to update for the group (id, name, npi, taxId).
+ * @returns {object} A success or error message.
+ */
+function updateGroup(groupData) {
+  if (!groupData || !groupData.id) {
+    return { success: false, message: "Group ID is required to update." };
+  }
+  // Using generic patchDetailedInfo for updating
+  const result = patchDetailedInfo(GROUPS_SHEET_NAME, groupData.id, groupData);
+  if (result.success) {
+    logAuditEvent("Request", `Group updated: ${groupData.id}`, { groupId: groupData.id, newData: groupData });
+  } else {
+    logAuditEvent("Error", `Failed to update group ${groupData.id}: ${result.message}`);
+  }
+  return result;
+}
+
+/**
+ * Deletes a group record and its associated provider and payer relations.
+ * @param {string} groupId - The ID of the group to delete.
+ * @returns {object} A success or error message.
+ */
+function deleteGroup(groupId) {
+  try {
+    const result = deleteDetailedProviderInfo(GROUPS_SHEET_NAME, GROUPS_HEADERS, groupId);
+    if (result.success) {
+      // Delete associated GroupProviders
+      const groupProvidersSheet = getSheet(GROUP_PROVIDERS_SHEET_NAME, GROUP_PROVIDERS_HEADERS);
+      const providerGroupIdColIndex = GROUP_PROVIDERS_HEADERS.indexOf("Group ID");
+      deleteRowsByColumnValue(groupProvidersSheet, providerGroupIdColIndex, groupId);
+
+      // Delete associated GroupPayers
+      const groupPayersSheet = getSheet(GROUP_PAYERS_SHEET_NAME, GROUP_PAYERS_HEADERS);
+      const payerGroupIdColIndex = GROUP_PAYERS_HEADERS.indexOf("Group ID");
+      deleteRowsByColumnValue(groupPayersSheet, payerGroupIdColIndex, groupId);
+
+      // Delete associated ProviderEnrollments
+      const enrollmentsSheet = getSheet(PROVIDER_ENROLLMENTS_SHEET_NAME, PROVIDER_ENROLLMENTS_HEADERS);
+      const enrollmentGroupIdColIndex = PROVIDER_ENROLLMENTS_HEADERS.indexOf("Group ID");
+      deleteRowsByColumnValue(enrollmentsSheet, enrollmentGroupIdColIndex, groupId);
+
+      logAuditEvent("Request", `Group deleted: ${groupId}`, { groupId: groupId });
+    }
+    return result;
+  } catch (error) {
+    logAuditEvent("Error", `Failed to delete group ${groupId}: ${error.message}`);
+    return { success: false, message: `Failed to delete group: ${error.message}` };
+  }
+}
+
+/**
+ * Retrieves details for a specific group, including its associated providers and payers.
+ * @param {string} groupId The ID of the group to retrieve.
+ * @returns {object} An object containing success status and the group data with related entities.
+ */
+function getGroupDetails(groupId) { /* Existing implementation from Code.txt */ }
+
+/**
+ * Lists providers associated with a specific group, with pagination and sorting.
+ * @param {string} groupId The ID of the group.
+ * @param {object} [options={}] Query parameters for pagination, sorting, and searching.
+ * @returns {object} An object with the list of providers and pagination info.
+ */
+function listGroupProviders(groupId, options = {}) { /* Existing implementation from Code.txt */ }
+
+/**
+ * Lists enrollments associated with a specific group, with pagination and sorting.
+ * @param {string} groupId The ID of the group.
+ * @param {object} [options={}] Query parameters for pagination and sorting.
+ * @returns {object} An object with the list of enrollments and pagination info.
+ */
+function listGroupEnrollments(groupId, options = {}) { /* Existing implementation from Code.txt */ }
+
+/**
+ * Adds or removes providers from a group.
+ * @param {string} groupId The ID of the group to modify.
+ * @param {object} body An object with 'add' and/or 'remove' arrays of provider IDs.
+ * @returns {object} A success or error message.
+ */
+function patchGroupProviderRelation(groupId, body) { /* Existing implementation from Code.txt */ }
+
+/**
+ * Adds or removes payers from a group.
+ * @param {string} groupId The ID of the group to modify.
+ * @param {object} body An object with 'add' and/or 'remove' arrays of payer IDs.
+ * @returns {object} A success or error message.
+ */
+function patchGroupPayerRelation(groupId, body) { /* Existing implementation from Code.txt */ }

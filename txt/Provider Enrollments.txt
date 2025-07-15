@@ -1,0 +1,114 @@
+// --- Provider Enrollments ---
+/**
+ * Creates a new provider enrollment record.
+ * @param {object} enrollmentData - The data for the new enrollment.
+ * @returns {object} A success or error object.
+ */
+function createProviderEnrollment(enrollmentData) {
+  try {
+    if (!enrollmentData || !enrollmentData.providerId || !enrollmentData.groupId || !enrollmentData.payerPlanId) {
+      return { success: false, message: "Provider ID, Group ID, and Payer Plan ID are required for enrollment." };
+    }
+    const sheet = getSheet(PROVIDER_ENROLLMENTS_SHEET_NAME, PROVIDER_ENROLLMENTS_HEADERS);
+    const newId = Utilities.getUuid();
+    // Headers: ["ID", "Group ID", "Payer Plan ID", "Provider ID", "Effective Date", "Enrollment Status",
+    // "Network Status", "Specialist Type", "Submission Date", "Closed Date", "External Provider Plan ID", "Comments"]
+    const rowData = [
+      newId,
+      enrollmentData.groupId,
+      enrollmentData.payerPlanId,
+      enrollmentData.providerId,
+      enrollmentData.effectiveDate || "",
+      enrollmentData.enrollmentStatus || "NotSubmitted",
+      enrollmentData.networkStatus || "None",
+      enrollmentData.specialistType || "None",
+      enrollmentData.submissionDate || "",
+      enrollmentData.closedDate || "",
+      enrollmentData.externalProviderPlanId || "",
+      enrollmentData.comments || ""
+    ];
+    sheet.appendRow(rowData);
+    invalidateRowIndexCache(sheet);
+    logAuditEvent("Request", `Provider Enrollment created: ${newId} for Provider ${enrollmentData.providerId}`, { enrollmentId: newId, providerId: enrollmentData.providerId });
+    return { success: true, message: `Provider Enrollment created with ID: ${newId}` };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to create provider enrollment: ${error.message}`);
+    return { success: false, message: `Failed to create provider enrollment: ${error.message}` };
+  }
+}
+
+/**
+ * Lists provider enrollments, optionally filtered by provider ID.
+ * @param {string} [providerId] - Optional. The ID of the provider to filter enrollments by.
+ * @returns {object} An object containing success status and enrollments data.
+ */
+function listProviderEnrollments(providerId = null) {
+  try {
+    const sheet = getSheet(PROVIDER_ENROLLMENTS_SHEET_NAME, PROVIDER_ENROLLMENTS_HEADERS);
+    let allEnrollments = sheetDataToObjects(sheet.getDataRange().getValues());
+
+    if (providerId) {
+      allEnrollments = allEnrollments.filter(e => e.providerId === providerId);
+    }
+
+    // Enrich with Group, Payer, and Payer Plan names for better context
+    const groups = sheetDataToObjects(getSheet(GROUPS_SHEET_NAME, GROUPS_HEADERS).getDataRange().getValues());
+    const plans = sheetDataToObjects(getSheet(PAYER_PLANS_SHEET_NAME, PAYER_PLANS_HEADERS).getDataRange().getValues());
+    const payers = sheetDataToObjects(getSheet(PAYERS_SHEET_NAME, PAYERS_HEADERS).getDataRange().getValues());
+
+    const groupMap = new Map(groups.map(g => [g.id, g.name]));
+    const planMap = new Map(plans.map(p => [p.id, {name: p.name, payerId: p.payerId}]));
+    const payerMap = new Map(payers.map(p => [p.id, p.name]));
+
+    allEnrollments.forEach(enrollment => {
+      enrollment.groupName = groupMap.get(enrollment.groupId) || 'N/A';
+      const planInfo = planMap.get(enrollment.payerPlanId);
+      if (planInfo) {
+        enrollment.payerPlanName = planInfo.name || 'N/A';
+        enrollment.payerName = payerMap.get(planInfo.payerId) || 'N/A';
+      } else {
+        enrollment.payerPlanName = 'N/A';
+        enrollment.payerName = 'N/A';
+      }
+    });
+
+    return { success: true, data: allEnrollments };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to list provider enrollments: ${error.message}`);
+    return { success: false, message: `Failed to list provider enrollments: ${error.message}` };
+  }
+}
+
+/**
+ * Updates an existing provider enrollment record.
+ * @param {object} enrollmentData - The data to update for the enrollment.
+ * @returns {object} A success or error message.
+ */
+function updateProviderEnrollment(enrollmentData) {
+  if (!enrollmentData || !enrollmentData.id) {
+    return { success: false, message: "Enrollment ID is required to update." };
+  }
+  // Using generic patchDetailedInfo for updating
+  const result = patchDetailedInfo(PROVIDER_ENROLLMENTS_SHEET_NAME, enrollmentData.id, enrollmentData);
+  if (result.success) {
+    logAuditEvent("Request", `Provider Enrollment updated: ${enrollmentData.id}`, { enrollmentId: enrollmentData.id, newData: enrollmentData });
+  } else {
+    logAuditEvent("Error", `Failed to update provider enrollment ${enrollmentData.id}: ${result.message}`);
+  }
+  return result;
+}
+
+/**
+ * Deletes a provider enrollment record.
+ * @param {string} enrollmentId - The ID of the enrollment to delete.
+ * @returns {object} A success or error message.
+ */
+function deleteProviderEnrollment(enrollmentId) {
+  // Using generic deleteDetailedProviderInfo for deleting
+  const result = deleteDetailedProviderInfo(PROVIDER_ENROLLMENTS_SHEET_NAME, PROVIDER_ENROLLMENTS_HEADERS, enrollmentId);
+  if (result.success) {
+    logAuditEvent("Request", `Provider Enrollment deleted: ${enrollmentId}`, { enrollmentId: enrollmentId });
+  }
+  return result;
+}
+

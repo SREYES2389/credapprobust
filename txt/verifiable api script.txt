@@ -1,0 +1,4722 @@
+
+/**
+ * @fileoverview
+ * This JavaScript code provides a simulated client for the Verifiable API,
+ * generated from the provided OpenAPI specification.
+ * It includes functions for each API endpoint, along with data models (schemas).
+ *
+ * IMPORTANT: This is a client-side simulation and does not actually make API calls
+ * to the Verifiable API. It returns mock data based on the API's defined schemas.
+ * To use a real API, you would replace the fetch logic with actual API calls
+ * and handle authentication.
+ */
+
+// Base URL for the API (can be switched between staging and production)
+const BASE_URL = "https://api.discovery.verifiable.com"; // Production URL
+
+/**
+ * @namespace Models
+ * @description Contains JavaScript representations of the API's data schemas.
+ * These models are for reference and can be used to structure data when
+ * interacting with the API client.
+ */
+const Models = {
+  // Authentication Models
+  AuthResponseModel: {
+    tokenId: "string (uuid)",
+    token: "string (sensitive)",
+    email: "string",
+    role: "UserRoleModel",
+    expiresAt: "string (date-time)",
+    persistenceHint: "enum (Persistent, Ephemeral)",
+  },
+  PasswordAuthModel: {
+    email: "string",
+    password: "string (sensitive)",
+    newPassword: "string (sensitive, optional)",
+    timeToLive: "string (timespan, optional)",
+  },
+  PasswordResetRequestModel: {
+    token: "string (sensitive)",
+    newPassword: "string (sensitive)",
+  },
+  RequestPasswordResetRequestModel: {
+    email: "string (email)",
+  },
+  GoogleAuthModel: {
+    code: "string (sensitive)",
+    timeToLive: "string (timespan, optional)",
+    token: "string (sensitive, optional)",
+  },
+  AccessTokenModel: {
+    id: "string (uuid)",
+    lastUserAgent: "string",
+    lastIpAddress: "string",
+    lastUsed: "string (date-time)",
+    isCurrent: "boolean",
+    expiresAt: "string (date-time)",
+  },
+  AccessTokenPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of AccessTokenModel",
+    sortedBy: "enum (Id)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id), Values: enum (Asc, Desc) }",
+  },
+  InvalidateAllAccessTokensRequestModel: {
+    invalidateCurrent: "boolean",
+    tokenIds: "array of string (uuid), optional",
+  },
+
+  // Definition Models
+  CountryModel: {
+    id: "string (uuid)",
+    name: "string",
+    isoCode: "string",
+    createdAt: "string (date-time)",
+  },
+
+  // Provider Models
+  ProviderRequestModel: {
+    firstName: "string",
+    lastName: "string",
+    dateOfBirth: "string (date-time, optional)",
+    gender: "enum (Unknown, Male, Female, NonBinaryOrThirdGender, Other, PreferNotToSay, optional)",
+    ethnicity: "array of enum (AmericanIndianOrAlaskaNative, Asian, BlackOrAfricanAmerican, HispanicOrLatino, NativeHawaiianOrOtherPacificIslander, White, PreferNotToSay, NoInformationToAnswer, optional)",
+    ssn: "string (optional)",
+    npi: "integer (int64, optional)",
+    aliases: "array of ProviderAliasRequestModel, optional",
+    primaryPracticeState: "enum (US states, optional)",
+    additionalPracticeStates: "array of enum (US states, optional)",
+    credentialingStatus: "string (optional)",
+    emails: "array of ProviderEmailRequestModel, optional",
+    addresses: "array of ProviderAddressRequestModel, optional",
+    phone: "string (optional)",
+    languages: "array of string, optional",
+    credentialedDate: "string (date-time, optional)",
+    recredentialedDates: "array of string (date-time), optional",
+    nextCredentialingDate: "string (date, optional)",
+    providerTypeId: "string (uuid, optional)",
+    deactivated: "boolean (optional)",
+  },
+  ProviderModel: {
+    id: "string (uuid)",
+    firstName: "string",
+    lastName: "string",
+    dateOfBirth: "string (date-time, optional)",
+    ssn: "string (optional)",
+    credentialingStatus: "string",
+    credentialedDate: "string (date-time, optional)",
+    nextCredentialingDate: "string (date, optional)",
+    npi: "integer (int64, optional)",
+    deactivated: "boolean",
+    deactivatedAt: "string (date-time, optional)",
+    aliases: "array of ProviderAliasModel, optional",
+    primaryPracticeState: "enum (US states, optional)",
+    additionalPracticeStates: "array of enum (US states, optional)",
+    gender: "enum (Unknown, Male, Female, NonBinaryOrThirdGender, Other, PreferNotToSay, optional)",
+    ethnicity: "array of enum (AmericanIndianOrAlaskaNative, Asian, BlackOrAfricanAmerican, HispanicOrLatino, NativeHawaiianOrOtherPacificIslander, White, PreferNotToSay, NoInformationToAnswer, optional)",
+    addresses: "array of ProviderAddressModel, optional",
+    emails: "array of ProviderEmailModel, optional",
+    phone: "string (optional)",
+    languages: "array of string, optional",
+    recredentialedDates: "array of string (date-time), optional",
+    providerType: "ProviderTypeModel",
+    createdAt: "string (date-time)",
+  },
+  ProviderPatchModel: {
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    dateOfBirth: "string (date-time, optional)",
+    ssn: "string (optional)",
+    npi: "integer (int64, optional)",
+    aliases: "array of ProviderAliasRequestModel, optional",
+    primaryPracticeState: "enum (US states, optional)",
+    additionalPracticeStates: "array of enum (US states, optional)",
+    gender: "enum (Unknown, Male, Female, NonBinaryOrThirdGender, Other, PreferNotToSay, optional)",
+    ethnicity: "array of enum (AmericanIndianOrAlaskaNative, Asian, BlackOrAfricanAmerican, HispanicOrLatino, NativeHawaiianOrOtherPacificIslander, White, PreferNotToSay, NoInformationToAnswer, optional)",
+    credentialingStatus: "string (optional)",
+    emails: "array of ProviderEmailRequestModel, optional",
+    addresses: "array of ProviderAddressRequestModel, optional",
+    phone: "string (optional)",
+    languages: "array of string, optional",
+    credentialedDate: "string (date-time, optional)",
+    nextCredentialingDate: "string (date, optional)",
+    recredentialedDates: "array of string (date-time), optional",
+    providerTypeId: "string (uuid, optional)",
+    deactivated: "boolean (optional)",
+  },
+  ProviderPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderModel",
+    sortedBy: "enum (Id, LastName, FirstName, CredentialingStatus, CredentialedDate)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, LastName, FirstName, CredentialingStatus, CredentialedDate), Values: enum (Asc, Desc) }",
+  },
+  ProviderAggregationsModel: {
+    total: "integer (int32)",
+    aggregations: "object (string: integer)",
+  },
+  ProviderTypeModel: {
+    id: "string (uuid)",
+    name: "string",
+  },
+  ProviderDueForRecredentialingModel: {
+    id: "string (uuid)",
+    firstName: "string",
+    lastName: "string",
+    dateOfBirth: "string (date-time, optional)",
+    ssn: "string (optional)",
+    credentialingStatus: "string",
+    credentialedDate: "string (date-time, optional)",
+    nextCredentialingDate: "string (date, optional)",
+    npi: "integer (int64, optional)",
+    deactivated: "boolean",
+    requestId: "string (uuid, optional)",
+    requestType: "enum (Initial, ReCredentialing, optional)",
+    requestCreatedAt: "string (date-time, optional)",
+    currentEvent: "CredentialingRequestEventModel",
+    requestPriority: "enum (Low, Medium, High, Urgent, optional)",
+    isSelfManaged: "boolean (optional)",
+    currentEventStatus: "enum (RequestSubmitted, RequestInProgress, AdditionalInformationRequested, AdditionalInformationSubmitted, CancellationRequested, Cancelled, Completed, CompletedWithConcern, UnableToComplete, SecondAttemptMissingInfo, ThirdAttemptMissingInfo, optional)",
+    currentEventDate: "string (date-time, optional)",
+    owner: "BaseUserModel",
+  },
+  ProviderDueForRecredentialingPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderDueForRecredentialingModel",
+    sortedBy: "enum (ProviderFirstName, ProviderLastName, RequestCreatedAt)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ additionalProperties: enum (Asc, Desc) }",
+  },
+  ProviderMonitoringSanctionsAndExclusionsSummaryAggregationsModel: {
+    notMonitored: "integer (int32)",
+    partiallyMonitored: "integer (int32)",
+    fullyMonitored: "integer (int32)",
+  },
+  ProviderMonitoringSanctionsAndExclusionsSummaryModel: {
+    id: "string (uuid)",
+    firstName: "string",
+    lastName: "string",
+    npi: "integer (int64, optional)",
+    providerType: "ProviderTypeModel",
+    credentialingStatus: "string",
+    credentialedDate: "string (date-time, optional)",
+    nextCredentialingDate: "string (date, optional)",
+    monitorArray: "array of enum (Dataset types)",
+    monitoringCategory: "enum (NotMonitored, PartiallyMonitored, FullyMonitored)",
+  },
+  ProviderMonitoringSanctionsAndExclusionsSummaryPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderMonitoringSanctionsAndExclusionsSummaryModel",
+    sortedBy: "enum (FirstName, LastName, CredentialingStatus)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (FirstName, LastName, CredentialingStatus), Values: enum (Asc, Desc) }",
+  },
+
+  // Provider Info Models (Aliases, Addresses, Emails, Education, Training, Work History, DEA, Board Certifications, Certificates, CAQH)
+  ProviderAliasRequestModel: {
+    firstName: "string",
+    lastName: "string",
+  },
+  ProviderAliasModel: {
+    firstName: "string",
+    lastName: "string",
+    id: "string (uuid)",
+  },
+  ProviderAddressRequestModel: {
+    state: "enum (US states)",
+    zipCode: "string",
+    city: "string",
+    addressLine1: "string",
+    addressLine2: "string (optional)",
+    type: "enum (Unspecified, Home, Work)",
+  },
+  ProviderAddressModel: {
+    state: "enum (US states)",
+    zipCode: "string",
+    city: "string",
+    addressLine1: "string",
+    addressLine2: "string (optional)",
+    type: "enum (Unspecified, Home, Work)",
+    id: "string (uuid)",
+  },
+  ProviderEmailRequestModel: {
+    email: "string",
+    type: "enum (Unspecified, Personal, Work)",
+  },
+  ProviderEmailModel: {
+    email: "string",
+    type: "enum (Unspecified, Personal, Work)",
+    id: "string (uuid)",
+  },
+  EducationRequestModel: {
+    ecfmgNumber: "string (optional)",
+    ecfmgIssueDate: "string (date-time, optional)",
+    graduateType: "enum (Undergraduate, Professional, FifthPathway, optional)",
+    schoolName: "string (optional)",
+    schoolCode: "string (optional)",
+    branchCode: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    completed: "boolean (optional)",
+    degree: "string (optional)",
+  },
+  EducationModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    ecfmgNumber: "string",
+    ecfmgIssueDate: "string (date-time)",
+    graduateType: "enum (Undergraduate, Professional, FifthPathway)",
+    schoolName: "string",
+    schoolCode: "string",
+    branchCode: "string",
+    startDate: "string (date-time)",
+    endDate: "string (date-time)",
+    completed: "boolean",
+    degree: "string",
+  },
+  EducationPatchModel: {
+    ecfmgNumber: "string (optional)",
+    ecfmgIssueDate: "string (date-time, optional)",
+    graduateType: "enum (Undergraduate, Professional, FifthPathway, optional)",
+    schoolName: "string (optional)",
+    schoolCode: "string (optional)",
+    branchCode: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    completed: "boolean (optional)",
+    degree: "string (optional)",
+  },
+  TrainingRequestModel: {
+    trainingType: "enum (Internship, Residency, Fellowship, OtherTraining, FacultyPositions, Unspecified, optional)",
+    institutionName: "string (optional)",
+    schoolCode: "string (optional)",
+    schoolName: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    completed: "boolean (optional)",
+    speciality: "string (optional)",
+    sponsoringState: "enum (US states, optional)",
+  },
+  TrainingModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    trainingType: "enum (Internship, Residency, Fellowship, OtherTraining, FacultyPositions, Unspecified)",
+    institutionName: "string",
+    schoolCode: "string",
+    schoolName: "string",
+    startDate: "string (date-time)",
+    endDate: "string (date-time)",
+    completed: "boolean",
+    speciality: "string",
+    sponsoringState: "enum (US states)",
+  },
+  TrainingPatchModel: {
+    trainingType: "enum (Internship, Residency, Fellowship, OtherTraining, FacultyPositions, Unspecified, optional)",
+    institutionName: "string (optional)",
+    schoolCode: "string (optional)",
+    schoolName: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    completed: "boolean (optional)",
+    speciality: "string (optional)",
+    sponsoringState: "enum (US states, optional)",
+  },
+  WorkHistoryRequestModel: {
+    workHistoryType: "enum (Employment, Gap, optional)",
+    name: "string (optional)",
+    jobTitle: "string (optional)",
+    address: "WorkHistoryAddressModel (optional)",
+    phone: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    isCurrentEmployer: "boolean (optional)",
+    departureReason: "string (optional)",
+    gapExplanation: "string (optional)",
+  },
+  WorkHistoryModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    workHistoryType: "enum (Employment, Gap)",
+    name: "string",
+    jobTitle: "string",
+    address: "WorkHistoryAddressModel",
+    phone: "string",
+    startDate: "string (date-time)",
+    endDate: "string (date-time)",
+    isCurrentEmployer: "boolean",
+    departureReason: "string",
+    gapExplanation: "string",
+  },
+  WorkHistoryPatchModel: {
+    workHistoryType: "enum (Employment, Gap, optional)",
+    name: "string (optional)",
+    jobTitle: "string (optional)",
+    address: "WorkHistoryAddressModel (optional)",
+    phone: "string (optional)",
+    startDate: "string (date-time, optional)",
+    endDate: "string (date-time, optional)",
+    isCurrentEmployer: "boolean (optional)",
+    departureReason: "string (optional)",
+    gapExplanation: "string (optional)",
+  },
+  WorkHistoryAddressModel: {
+    type: "enum (Unspecified, Home, Work)",
+    state: "enum (US states)",
+    zipCode: "string",
+    city: "string",
+    addressLine1: "string",
+    addressLine2: "string (optional)",
+    countryId: "string (uuid, optional)",
+  },
+  DeaRegistrationInfoRequestModel: {
+    registrationNumber: "string",
+  },
+  DeaRegistrationInfoModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    registrationNumber: "string",
+  },
+  DeaRegistrationInfoPatchModel: {
+    registrationNumber: "string",
+  },
+  BoardCertificationInfoRequestModel: {
+    type: "enum (Board certification types)",
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    isPrimary: "boolean (optional)",
+    boardCertificationNumber: "string (optional)",
+    specialty: "string (optional)",
+    nonVerifiedInfo: "NonVerifiedBoardCertificationInfoModel (optional)",
+  },
+  BoardCertificationInfoModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    type: "enum (Board certification types)",
+    firstName: "string",
+    lastName: "string",
+    boardCertificationNumber: "string",
+    specialty: "string",
+    nonVerifiedInfo: "NonVerifiedBoardCertificationInfoModel",
+    isPrimary: "boolean",
+  },
+  BoardCertificationInfoPatchModel: {
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    isPrimary: "boolean (optional)",
+    boardCertificationNumber: "string (optional)",
+    specialty: "string (optional)",
+    nonVerifiedInfo: "NonVerifiedBoardCertificationInfoModel (optional)",
+  },
+  NonVerifiedBoardCertificationInfoModel: {
+    initialCertificationDate: "string (date-time, optional)",
+    recertificationDate: "string (date-time, optional)",
+    expirationDate: "string (date-time, optional)",
+  },
+  CertificateInfoRequestModel: {
+    type: "enum (Certificate types)",
+    certificateNumber: "string",
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    issueDate: "string (date-time, optional)",
+    expirationDate: "string (date-time, optional)",
+    certifyingOrganization: "string (optional)",
+  },
+  CertificateInfoModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    type: "enum (Certificate types)",
+    firstName: "string",
+    lastName: "string",
+    certificateNumber: "string",
+    issueDate: "string (date-time)",
+    expirationDate: "string (date-time)",
+    certifyingOrganization: "string",
+  },
+  CertificateInfoPatchModel: {
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    certificateNumber: "string (optional)",
+    issueDate: "string (date-time, optional)",
+    expirationDate: "string (date-time, optional)",
+    certifyingOrganization: "string (optional)",
+  },
+  CaqhLoginInfoRequestModel: {
+    caqhId: "string",
+  },
+  CaqhLoginInfoModel: {
+    lastUpdatedAt: "string (date-time)",
+    caqhId: "string",
+  },
+  LiabilityInsuranceRequestModel: {
+    name: "string (optional)",
+    isSelfInsured: "boolean (optional)",
+    originalEffectiveDate: "string (date-time, optional)",
+    currentEffectiveDate: "string (date-time, optional)",
+    currentExpirationDate: "string (date-time, optional)",
+    coverageType: "enum (Individual, Shared, Occurrence, ClaimsMade, optional)",
+    isUnlimitedCoverage: "boolean (optional)",
+    includesTailCoverage: "boolean (optional)",
+    occurrenceCoverageAmount: "number (double, optional)",
+    aggregateCoverageAmount: "number (double, optional)",
+    policyNumber: "string (optional)",
+  },
+  LiabilityInsuranceModel: {
+    lastUpdatedAt: "string (date-time)",
+    id: "string (uuid)",
+    name: "string",
+    isSelfInsured: "boolean",
+    originalEffectiveDate: "string (date-time)",
+    currentEffectiveDate: "string (date-time)",
+    currentExpirationDate: "string (date-time)",
+    coverageType: "enum (Individual, Shared, Occurrence, ClaimsMade)",
+    isUnlimitedCoverage: "boolean",
+    includesTailCoverage: "boolean",
+    occurrenceCoverageAmount: "number (double)",
+    aggregateCoverageAmount: "number (double)",
+    policyNumber: "string",
+  },
+  LiabilityInsurancePatchModel: {
+    name: "string (optional)",
+    isSelfInsured: "boolean (optional)",
+    originalEffectiveDate: "string (date-time, optional)",
+    currentEffectiveDate: "string (date-time, optional)",
+    currentExpirationDate: "string (date-time, optional)",
+    coverageType: "enum (Individual, Shared, Occurrence, ClaimsMade, optional)",
+    isUnlimitedCoverage: "boolean (optional)",
+    includesTailCoverage: "boolean (optional)",
+    occurrenceCoverageAmount: "number (double, optional)",
+    aggregateCoverageAmount: "number (double, optional)",
+    policyNumber: "string (optional)",
+  },
+
+  // Facility Models
+  FacilityRequestModel: {
+    name: "string (optional)",
+    parentFacilityId: "string (uuid, optional)",
+    dba: "string (optional)",
+    addressLine1: "string (optional)",
+    addressLine2: "string (optional)",
+    city: "string (optional)",
+    state: "enum (US states, optional)",
+    zipCode: "string (optional)",
+    phoneNumber: "string (optional)",
+    faxNumber: "string (optional)",
+    groupTaxId: "string (optional)",
+    facilityTaxId: "string (optional)",
+    contactName: "string (optional)",
+    contactEmail: "string (optional)",
+    medicarePartANumber: "string (optional)",
+    medicarePartBNumber: "string (optional)",
+    medicaidNumber: "string (optional)",
+  },
+  FacilityModel: {
+    id: "string (uuid)",
+    name: "string",
+    createdAt: "string (date-time)",
+    deactivated: "boolean",
+    parentFacilityId: "string (uuid, optional)",
+    dba: "string",
+    addressLine1: "string",
+    addressLine2: "string",
+    city: "string",
+    state: "enum (US states)",
+    zipCode: "string",
+    phoneNumber: "string",
+    faxNumber: "string",
+    groupTaxId: "string",
+    facilityTaxId: "string",
+    contactName: "string",
+    contactEmail: "string",
+    medicarePartANumber: "string",
+    medicarePartBNumber: "string",
+    medicaidNumber: "string",
+  },
+  FacilityPatchModel: {
+    name: "string (optional)",
+    deactivated: "boolean (optional)",
+    parentFacilityId: "string (uuid, optional)",
+    dba: "string (optional)",
+    addressLine1: "string (optional)",
+    addressLine2: "string (optional)",
+    city: "string (optional)",
+    state: "enum (US states, optional)",
+    zipCode: "string (optional)",
+    phoneNumber: "string (optional)",
+    faxNumber: "string (optional)",
+    groupTaxId: "string (optional)",
+    facilityTaxId: "string (optional)",
+    contactName: "string (optional)",
+    contactEmail: "string (optional)",
+    medicarePartANumber: "string (optional)",
+    medicarePartBNumber: "string (optional)",
+    medicaidNumber: "string (optional)",
+  },
+  FacilityPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FacilityModel",
+    sortedBy: "enum (Id, Name)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, Name), Values: enum (Asc, Desc) }",
+  },
+  FacilityLicenseTypeModel: {
+    id: "string (uuid)",
+    name: "string",
+  },
+  FacilityLicenseTypePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FacilityLicenseTypeModel",
+    sortedBy: "enum (Id, Name)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, Name), Values: enum (Asc, Desc) }",
+  },
+  FacilityAccreditationAgencyModel: {
+    id: "string (uuid)",
+    agencyName: "string",
+    programs: "array of FacilityAccreditationProgramModel",
+  },
+  FacilityAccreditationAgencyPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FacilityAccreditationAgencyModel",
+    sortedBy: "enum (Id, AgencyName)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, AgencyName), Values: enum (Asc, Desc) }",
+  },
+  FacilityAccreditationProgramModel: {
+    id: "string (uuid)",
+    programName: "string",
+  },
+  MedicareEnrollmentTypeModel: {
+    id: "string (uuid)",
+    code: "string",
+    description: "string",
+  },
+  MedicareEnrollmentTypePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of MedicareEnrollmentTypeModel",
+    sortedBy: "enum (Code, Description)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ additionalProperties: enum (Asc, Desc) }",
+  },
+  FacilityTaxonomyModel: {
+    id: "string (uuid)",
+    code: "string",
+    name: "string",
+  },
+  FacilityTaxonomyPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FacilityTaxonomyModel",
+    sortedBy: "enum (Id, Code)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, Code), Values: enum (Asc, Desc) }",
+  },
+
+  // Facility Info Models (NPI, DEA, Liability Insurance, License, Accreditation, CMS Certification, Medicare Enrollment)
+  FacilityNpiRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    npi: "integer (int64)",
+    nonVerifiedInfo: "FacilityNpiNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityNpiModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    npi: "integer (int64)",
+    nonVerifiedInfo: "FacilityNpiNonVerifiedInfoModel",
+  },
+  FacilityNpiPatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    nonVerifiedInfo: "FacilityNpiNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityNpiNonVerifiedInfoRequestModel: {
+    isActive: "boolean (optional)",
+  },
+  FacilityNpiNonVerifiedInfoModel: {
+    isActive: "boolean",
+  },
+  FacilityNpiNonVerifiedInfoPatchModel: {
+    isActive: "boolean (optional)",
+  },
+  FacilityDeaRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    deaNumber: "string",
+    nonVerifiedInfo: "FacilityDeaNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityDeaModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    deaNumber: "string",
+    nonVerifiedInfo: "FacilityDeaNonVerifiedInfoModel",
+  },
+  FacilityDeaPatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    nonVerifiedInfo: "FacilityDeaNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityDeaNonVerifiedInfoRequestModel: {
+    drugSchedules: "string (optional)",
+    state: "enum (US states, optional)",
+    expirationDate: "string (date, optional)",
+    businessActivityCode: "string (optional)",
+    paymentIndicator: "enum (Paid, Exempt, optional)",
+    isActive: "boolean (optional)",
+  },
+  FacilityDeaNonVerifiedInfoModel: {
+    drugSchedules: "string",
+    state: "enum (US states)",
+    expirationDate: "string (date)",
+    businessActivityCode: "string",
+    paymentIndicator: "enum (Paid, Exempt)",
+    isActive: "boolean",
+  },
+  FacilityDeaNonVerifiedInfoPatchModel: {
+    drugSchedules: "string (optional)",
+    state: "enum (US states, optional)",
+    expirationDate: "string (date, optional)",
+    businessActivityCode: "string (optional)",
+    paymentIndicator: "enum (Paid, Exempt, optional)",
+    isActive: "boolean (optional)",
+  },
+  FacilityLiabilityInsuranceRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    liabilityInsurer: "string",
+    policyNumber: "string (optional)",
+    effectiveDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+    coverageType: "string (optional)",
+    primaryLimitPerClaim: "number (double, optional)",
+    excessLimitPerClaim: "number (double, optional)",
+    primaryLimitAggregate: "number (double, optional)",
+    excessLimitAggregate: "number (double, optional)",
+  },
+  FacilityLiabilityInsuranceModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    liabilityInsurer: "string",
+    policyNumber: "string",
+    effectiveDate: "string (date)",
+    expirationDate: "string (date)",
+    coverageType: "string",
+    primaryLimitPerClaim: "number (double)",
+    excessLimitPerClaim: "number (double)",
+    primaryLimitAggregate: "number (double)",
+    excessLimitAggregate: "number (double)",
+  },
+  FacilityLiabilityInsurancePatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    liabilityInsurer: "string (optional)",
+    policyNumber: "string (optional)",
+    effectiveDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+    coverageType: "string (optional)",
+    primaryLimitPerClaim: "number (double, optional)",
+    excessLimitPerClaim: "number (double, optional)",
+    primaryLimitAggregate: "number (double, optional)",
+    excessLimitAggregate: "number (double, optional)",
+  },
+  FacilityLicenseRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    licenseTypeId: "string (uuid)",
+    state: "enum (US states)",
+    licenseNumber: "string",
+    isPrimary: "boolean",
+    nonVerifiedInfo: "FacilityLicenseNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityLicenseModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    licenseTypeId: "string (uuid)",
+    state: "enum (US states)",
+    licenseNumber: "string",
+    isPrimary: "boolean",
+    nonVerifiedInfo: "FacilityLicenseNonVerifiedInfoModel",
+  },
+  FacilityLicensePatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    isPrimary: "boolean (optional)",
+    nonVerifiedInfo: "FacilityLicenseNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityLicenseNonVerifiedInfoRequestModel: {
+    issueDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+    licenseStatus: "string (optional)",
+  },
+  FacilityLicenseNonVerifiedInfoModel: {
+    issueDate: "string (date)",
+    expirationDate: "string (date)",
+    licenseStatus: "string",
+  },
+  FacilityLicenseNonVerifiedInfoPatchModel: {
+    issueDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+    licenseStatus: "string (optional)",
+  },
+  FacilityAccreditationRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    accreditationAgencyId: "string (uuid)",
+    accreditationProgramId: "string (uuid)",
+    accreditationNumber: "string (optional)",
+    nonVerifiedInfo: "FacilityAccreditationNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityAccreditationModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    accreditationAgencyId: "string (uuid)",
+    accreditationProgramId: "string (uuid)",
+    accreditationNumber: "string",
+    nonVerifiedInfo: "FacilityAccreditationNonVerifiedInfoModel",
+  },
+  FacilityAccreditationPatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    accreditationNumber: "string (optional)",
+    nonVerifiedInfo: "FacilityAccreditationNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityAccreditationNonVerifiedInfoRequestModel: {
+    decision: "string (optional)",
+    effectiveDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+  },
+  FacilityAccreditationNonVerifiedInfoModel: {
+    decision: "string",
+    effectiveDate: "string (date)",
+    expirationDate: "string (date)",
+  },
+  FacilityAccreditationNonVerifiedInfoPatchModel: {
+    decision: "string (optional)",
+    effectiveDate: "string (date, optional)",
+    expirationDate: "string (date, optional)",
+  },
+  FacilityCmsCertificationRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    certificationNumber: "string",
+    nonVerifiedInfo: "FacilityCmsCertificationNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityCmsCertificationModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    certificationNumber: "string",
+    nonVerifiedInfo: "FacilityCmsCertificationNonVerifiedInfoModel",
+  },
+  FacilityCmsCertificationPatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    nonVerifiedInfo: "FacilityCmsCertificationNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityCmsCertificationNonVerifiedInfoRequestModel: {
+    certificationDate: "string (date, optional)",
+  },
+  FacilityCmsCertificationNonVerifiedInfoModel: {
+    certificationDate: "string (date)",
+  },
+  FacilityCmsCertificationNonVerifiedInfoPatchModel: {
+    certificationDate: "string (date, optional)",
+  },
+  FacilityMedicareEnrollmentRequestModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    pecosPacIdentifier: "string",
+    enrollmentTypeId: "string (uuid)",
+    state: "enum (US states)",
+    nonVerifiedInfo: "FacilityMedicareEnrollmentNonVerifiedInfoRequestModel (optional)",
+  },
+  FacilityMedicareEnrollmentModel: {
+    id: "string (uuid)",
+    lastUpdatedAt: "string (date-time)",
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom)",
+    associatedFacilitySpecialtyIds: "array of string (uuid)",
+    pecosPacIdentifier: "string",
+    enrollmentTypeId: "string (uuid)",
+    state: "enum (US states)",
+    nonVerifiedInfo: "FacilityMedicareEnrollmentNonVerifiedInfoModel",
+  },
+  FacilityMedicareEnrollmentPatchModel: {
+    appliesTo: "enum (SelfOnly, SelfAndAllChildren, Custom, optional)",
+    associatedFacilitySpecialtyIds: "array of string (uuid), optional",
+    nonVerifiedInfo: "FacilityMedicareEnrollmentNonVerifiedInfoPatchModel (optional)",
+  },
+  FacilityMedicareEnrollmentNonVerifiedInfoRequestModel: {
+    pecosEnrollmentIdentifier: "string (optional)",
+  },
+  FacilityMedicareEnrollmentNonVerifiedInfoModel: {
+    pecosEnrollmentIdentifier: "string",
+  },
+  FacilityMedicareEnrollmentNonVerifiedInfoPatchModel: {
+    pecosEnrollmentIdentifier: "string (optional)",
+  },
+
+  // Facility Specialties Models
+  FacilitySpecialityRequestModel: {
+    taxonomyId: "string (uuid)",
+  },
+  FacilitySpecialityModel: {
+    id: "string (uuid)",
+    facilityId: "string (uuid)",
+    taxonomyId: "string (uuid)",
+  },
+  FacilitySpecialityPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FacilitySpecialityModel",
+    sortedBy: "enum (TaxonomyId)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (TaxonomyId), Values: enum (Asc, Desc) }",
+  },
+
+  // Provider Profiles Models
+  ProviderProfileImportRequestModel: {
+    providerId: "string (uuid)",
+    source: "enum (Npi, CaqhPo, AmericanMedicalAssociationPhysician, AmericanMedicalAssociationPhysicianAssistant)",
+  },
+  ProviderProfileImportModel: {
+    id: "string (uuid)",
+    providerId: "string (uuid)",
+    source: "enum (Npi, CaqhPo, AmericanMedicalAssociationPhysician, AmericanMedicalAssociationPhysicianAssistant)",
+    started: "string (date-time)",
+    completed: "string (date-time, optional)",
+    status: "enum (Pending, Working, Completed, Failed)",
+    trigger: "enum (Manual, Automated)",
+    failureCode: "enum (Failure codes, optional)",
+    failureReason: "FailureModel",
+    profile: "ProviderProfileModel",
+    parameters: "array of IProviderParameter",
+  },
+  ProviderProfileImportSourcePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of IProviderProfileImportSource",
+    sortedBy: "enum (Name, Source)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Name, Source), Values: enum (Asc, Desc) }",
+  },
+  ProviderProfileImportPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderProfileImportModel",
+    sortedBy: "enum (Id, Source, Status, Completed, Started)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, Source, Status, Completed, Started), Values: enum (Asc, Desc) }",
+  },
+  IProviderProfileImportSource: {
+    source: "enum (Npi, CaqhPo, AmericanMedicalAssociationPhysician, AmericanMedicalAssociationPhysicianAssistant)",
+    name: "string",
+    requiredParameterTypes: "array of enum (Parameter types)",
+    hasPassThroughFee: "boolean",
+    supportsReimport: "boolean",
+  },
+  ProviderProfileModel: {
+    // This is a polymorphic type, actual structure depends on 'type' field
+    type: "enum (Npi, CaqhPo, AmericanMedicalAssociationPhysician, AmericanMedicalAssociationPhysicianAssistant)",
+    // ... other properties based on the specific profile type (NpiProfile.NpiProviderProfileModel, CaqhProfile.CaqhProviderProfileModel, etc.)
+  },
+
+  // Notes Models
+  ProviderNotesRequestModel: {
+    note: "string",
+  },
+  ProviderNotesModel: {
+    providerId: "string (uuid)",
+    timestamp: "string (date-time)",
+    note: "string",
+    id: "string (uuid)",
+    alert: "AlertModel",
+  },
+
+  // Files Models
+  FileModel: {
+    id: "string (uuid)",
+    providerId: "string (uuid, optional)",
+    facilityId: "string (uuid, optional)",
+    createdAt: "string (date-time)",
+    createdByUserId: "string (uuid)",
+    createdByUserEmail: "string",
+    path: "string",
+    size: "integer (int32)",
+  },
+  FilePageModel: {
+    sort: "{ Keys: enum (Path, CreatedAt), Values: enum (Asc, Desc) }",
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of FileModel",
+    sortedBy: "enum (Path, CreatedAt)",
+    sortDirection: "enum (Asc, Desc)",
+  },
+
+  // Licenses Models
+  AttachLicenseRequestModel: {
+    licenseNumber: "string (optional)",
+    licenseTypeId: "string (uuid)",
+    firstName: "string (optional)",
+    lastName: "string (optional)",
+    state: "enum (US states)",
+    restrictionStatus: "enum (None, Restricted, Unrestricted, optional)",
+    approvedStatus: "enum (Pending, Yes, No, optional)",
+    nonVerifiedInfo: "NonVerifiedLicenseInfoModel (optional)",
+    skipVerification: "boolean (optional)",
+    isCurrentlyPracticing: "boolean (optional)",
+    isPrimary: "boolean (optional)",
+    prescriptiveAuthority: "enum (RequiredMet, RequiredNotMet, NotRequired, optional)",
+    collaboratingProviderId: "string (uuid, optional)",
+  },
+  LicenseModel: {
+    providerId: "string (uuid)",
+    licenseNumber: "string",
+    firstName: "string",
+    lastName: "string",
+    state: "enum (US states)",
+    jobStatus: "enum (Idle, Pending, Working)",
+    nonVerifiedInfo: "NonVerifiedLicenseInfoModel",
+    currentVerificationStatus: "enum (Found, Failed, NeedsReview, NotFound, Pending, Working)",
+    currentVerification: "LicenseVerificationModel",
+    restrictionStatus: "enum (None, Restricted, Unrestricted)",
+    approvedStatus: "enum (Pending, Yes, No)",
+    isPrimary: "boolean",
+    id: "string (uuid)",
+    isCurrentlyPracticing: "boolean",
+    prescriptiveAuthority: "enum (RequiredMet, RequiredNotMet, NotRequired)",
+    collaboratingProviderId: "string (uuid, optional)",
+    licenseType: "SimplifiedLicenseTypeModel",
+  },
+  LicensePatchModel: {
+    restrictionStatus: "enum (None, Restricted, Unrestricted, optional)",
+    approvedStatus: "enum (Pending, Yes, No, optional)",
+    nonVerifiedInfo: "NonVerifiedLicenseInfoModel (optional)",
+    isCurrentlyPracticing: "boolean (optional)",
+    isPrimary: "boolean (optional)",
+    prescriptiveAuthority: "enum (RequiredMet, RequiredNotMet, NotRequired, optional)",
+    collaboratingProviderId: "string (uuid, optional)",
+  },
+  NonVerifiedLicenseInfoModel: {
+    issueDate: "string (date-time, optional)",
+    expirationDate: "string (date-time, optional)",
+    status: "string (optional)",
+  },
+  LicenseVerificationModel: {
+    originalStatus: "enum (Found, Failed, NeedsReview, NotFound, Pending, Working)",
+    status: "enum (Found, Failed, NeedsReview, NotFound, Pending, Working)",
+    trigger: "enum (Manual, Monitor)",
+    started: "string (date-time)",
+    processingTime: "integer (int64)",
+    results: "array of LicenseVerificationResultModel",
+    additionalVerificationParameters: "array of IProviderParameter",
+    verificationSource: "VerificationSourceModel",
+    failureReason: "FailureModel",
+    correctResultIndex: "integer (int32, optional)",
+    export: "string",
+    id: "string (uuid)",
+    monitoringMetadata: "MonitoringMetadata",
+  },
+  LicenseVerificationResultModel: {
+    name: "string",
+    licenseType: "string",
+    licenseStatus: "string",
+    licenseNumber: "string",
+    address: "string",
+    issued: "string (date-time)",
+    expires: "string (date-time)",
+    screenshots: "array of string",
+    attachments: "array of LicenseVerificationAttachmentModel",
+    disciplinaryActions: "FlexibleDataModel",
+    additionalProperties: "FlexibleDataModel",
+    problems: "array of enum (NameMismatch, LicenseTypeMismatch)",
+    matchScore: "MatchScore",
+  },
+  LicenseVerificationAttachmentModel: {
+    file: "FileModel",
+    type: "enum (DisciplinaryAction, VerificationLetter, AdditionalDocument)",
+    source: "string",
+    downloadStatus: "enum (Downloaded, Failed)",
+    failureReason: "FailureModel",
+  },
+  LicenseVerificationDiffModel: {
+    old: "LicenseVerificationModel",
+    new: "LicenseVerificationModel",
+    diff: "object", // jsondiffpatch format
+  },
+  LicenseVerificationResolutionModel: {
+    status: "enum (Found, Failed, NeedsReview, NotFound, Pending, Working)",
+    correctResultIndex: "integer (int32, optional)",
+  },
+  ProviderLicenseModel: {
+    provider: "ProviderBaseModel",
+    license: "SimpleLicenseBaseModel",
+  },
+  ProviderLicensePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderLicenseModel",
+    sortedBy: "enum (ProviderFirstName, ProviderLastName, LicenseState, LicenseExpirationDate)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (ProviderFirstName, ProviderLastName, LicenseState, LicenseExpirationDate), Values: enum (Asc, Desc) }",
+  },
+  ProviderLicenseAggregationsModel: {
+    total: "integer (int32)",
+    aggregations: "object (string: integer)",
+  },
+  SimplifiedLicenseTypeModel: {
+    id: "string (uuid)",
+    taxonomy: "string",
+    name: "string",
+    aliases: "array of string",
+    abbreviations: "array of string",
+    states: "array of enum (US states, deprecated)",
+    verificationParameters: "object (string: LicenseVerificationParameters, deprecated)",
+    sources: "array of SimplifiedLicenseTypeSourceModel",
+  },
+  SimplifiedLicenseTypePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of SimplifiedLicenseTypeModel",
+    sortedBy: "enum (Taxonomy, Name)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Taxonomy, Name), Values: enum (Asc, Desc) }",
+  },
+  SimplifiedLicenseTypeSourceModel: {
+    state: "enum (US states)",
+    requiredParameters: "array of enum (LicenseNumber, Name, Ssn)",
+    optionalParameters: "array of enum (LicenseNumber, Name, Ssn)",
+    hasPassThroughFee: "boolean",
+  },
+  SimplifiedLicenseTypeStatusModel: {
+    licenseTypeId: "string (uuid)",
+    state: "enum (US states)",
+    status: "LicenseSourceStatusModel",
+    maintenanceWindows: "array of MaintenanceDowntimeCronDescription",
+  },
+  SimplifiedLicenseTypeStatusPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of SimplifiedLicenseTypeStatusModel",
+    sortedBy: "enum (State)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (State), Values: enum (Asc, Desc) }",
+  },
+  LicenseSourceStatusModel: {
+    issue: "enum (PossibleIssue, SourceIssue, AutomationIssue, AutomationDegraded, optional)",
+    averageProcessingTime: "number (double)",
+    averageFailureRate: "number (double)",
+  },
+  LicenseVerificationParameters: {
+    requiredParameters: "array of enum (LicenseNumber, Name, Ssn)",
+    optionalParameters: "array of enum (LicenseNumber, Name, Ssn)",
+  },
+  SimpleLicenseBaseModel: {
+    providerId: "string (uuid)",
+    number: "string",
+    state: "enum (US states)",
+    isPrimary: "boolean",
+    id: "string (uuid)",
+    isCurrentlyPracticing: "boolean",
+    status: "string",
+    issueDate: "string (date-time, optional)",
+    expiryDate: "string (date-time, optional)",
+    verificationStatus: "enum (Verified, Unverified, optional)",
+    licenseTypeId: "string (uuid)",
+    licenseTypeName: "string",
+    approvedStatus: "enum (Pending, Yes, No)",
+    restrictionStatus: "enum (None, Restricted, Unrestricted)",
+    nonVerifiedInfoIssueDate: "string (date-time, optional)",
+    nonVerifiedInfoExpirationDate: "string (date-time, optional)",
+    nonVerifiedInfoStatus: "string (optional)",
+  },
+
+  // Datasets Models
+  DatasetScanRequestModel: {
+    type: "enum (Dataset types)",
+    providerId: "string (uuid, optional)",
+    facilityId: "string (uuid, optional)",
+    options: "DatasetScanOptions (optional)",
+  },
+  DatasetScanModel: {
+    id: "string (uuid)",
+    started: "string (date-time)",
+    completed: "string (date-time, optional)",
+    type: "enum (Dataset types)",
+    status: "enum (Pending, Working, Completed, Failed, Active)",
+    providerId: "string (uuid, optional)",
+    facilityId: "string (uuid, optional)",
+    provider: "object (deprecated)",
+    trigger: "enum (Manual, Monitor)",
+    options: "DatasetScanOptions",
+    failureReason: "FailureModel",
+    statusDescription: "object",
+    parameters: "array of IProviderParameter",
+    matches: "array of DatasetMatchModel",
+    monitoringMetadata: "MonitoringMetadata",
+    verifiedAt: "string (date-time)",
+    datasetMetadata: "DatasetMetadata",
+  },
+  DatasetScanPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of DatasetScanModel",
+    sortedBy: "enum (Id, Started, Completed, Type, ProviderId, ProviderFirstName, ProviderLastName, FacilityId, FacilityName)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, Started, Completed, Type, ProviderId, ProviderFirstName, ProviderLastName, FacilityId, FacilityName), Values: enum (Asc, Desc) }",
+  },
+  DatasetScanOptions: {
+    parameterSetId: "string (uuid, optional)",
+    referenceId: "string (uuid, optional)",
+  },
+  DatasetMatchModel: {
+    id: "string (uuid)",
+    datasetTimestamp: "string (date-time)",
+    recordTimestamp: "string (date-time)",
+    data: "DatasetMatchData",
+    scanId: "string (uuid, optional)",
+    scan: "DatasetScanModel",
+    userActionNeeded: "boolean",
+    isIgnored: "boolean",
+    matchScore: "MatchScore",
+    userActionResolution: "enum (Accept, Reject, optional)",
+    userActionResolutionNote: "string",
+    matchRelevance: "enum (Low, Medium, High)",
+    createdTimestamp: "string (date-time)",
+    obsoleteTimestamp: "string (date-time)",
+  },
+  DatasetMatchPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of DatasetMatchModel",
+    sortedBy: "enum (Id, MatchRelevance)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, MatchRelevance), Values: enum (Asc, Desc) }",
+  },
+  DatasetMatchPatchModel: {
+    userActionResolutionNote: "string (optional)",
+    userActionResolution: "enum (Accept, Reject, null, optional)",
+  },
+  DatasetMatchesAggregationsModel: {
+    userActionNeeded: "DatasetMatchesAggregationModel",
+    accepted: "DatasetMatchesAggregationModel",
+  },
+  DatasetMatchesAggregationModel: {
+    total: "integer (int32)",
+    aggregations: "object (string: integer)",
+  },
+  DatasetMetadata: {
+    importDate: "string (date)",
+    importFileName: "string",
+  },
+  DatasetModel: {
+    name: "string",
+    type: "enum (Dataset types)",
+    tags: "array of string",
+    parameterSets: "array of ParameterSet",
+    supportedEntityTypes: "array of enum (Practitioner, Facility)",
+    status: "DatasetStatus",
+    monitoringIntervals: "array of enum (Continuous, Daily, Weekly, Monthly, Yearly)",
+    lastUpdated: "string (date-time)",
+    schema: "object", // JSON Schema
+    properties: "object",
+    capabilities: "{ Keys: enum (SupportsMultipleMonitors, SupportsReferences, SupportsAliases, SupportsMatchRelevance, SupportsContinuousMonitoring, SupportsOnDemandScanning, SupportsMonitoring), Values: boolean }",
+    maintenanceWindows: "array of MaintenanceDowntimeCronDescription",
+    hasPassThroughFee: "boolean",
+  },
+  DatasetStatus: {
+    expectedProcessingTime: "number (double)",
+  },
+  MaintenanceDowntimeCronDescription: {
+    expression: "string",
+    description: "string",
+    isUnderMaintenanceInTheNextHour: "boolean",
+    trigger: "enum (Manual, Automated)",
+    expiresIn: "string (timespan, optional)",
+    isExpired: "boolean (optional)",
+  },
+  ParameterSet: {
+    id: "string (uuid)",
+    entityType: "enum (Practitioner, Facility)",
+    supportedParameterTypes: "array of enum (Parameter types)",
+    requiredParameterTypes: "array of enum (Parameter types)",
+    isPreferred: "boolean",
+  },
+  IProviderParameter: {
+    // Polymorphic type, depends on 'type' field
+    type: "enum (Name, Npi, DateOfBirth, Ssn, License, Address, Education, BoardCertificationNumber, Dea, Certificate, CaqhId, ProviderType, FacilityName, FacilityAccreditationInfo, FacilityCmsCertificationInfo, NccpaBoardCertificateInfo, Gender)",
+    // ... other properties based on the specific parameter type
+  },
+  ProviderAddressParameter: {
+    addressType: "enum (Unspecified, Home, Work)",
+    addressLine: "string",
+    addressLine2: "string",
+    city: "string",
+    state: "enum (US states)",
+    zipCode: "string",
+    type: "enum (Address)",
+  },
+  ProviderBoardCertificationNumberParameter: {
+    boardCertificationNumber: "string",
+    type: "enum (BoardCertificationNumber)",
+  },
+  ProviderCaqhId: {
+    caqhProviderId: "integer (int64)",
+    type: "enum (CaqhId)",
+  },
+  ProviderCertificateParameter: {
+    certificateType: "enum (Certificate types)",
+    certificateNumber: "string",
+    type: "enum (Certificate)",
+  },
+  ProviderDateOfBirthParameter: {
+    dateOfBirth: "string (date-time)",
+    type: "enum (DateOfBirth)",
+  },
+  ProviderDeaParameter: {
+    registrationNumber: "string",
+    type: "enum (Dea)",
+  },
+  ProviderEducationParameter: {
+    graduationYear: "integer (int32)",
+    schoolName: "string",
+    schoolCode: "string",
+    branchCode: "string",
+    degree: "string",
+    type: "enum (Education)",
+  },
+  ProviderGenderParameter: {
+    gender: "enum (Unknown, Male, Female, NonBinaryOrThirdGender, Other, PreferNotToSay)",
+    type: "enum (Gender)",
+  },
+  ProviderLicenseParameter: {
+    licenseTypeId: "string (uuid)",
+    state: "enum (US states)",
+    number: "string",
+    isPrimary: "boolean",
+    type: "enum (License)",
+  },
+  ProviderNameParameter: {
+    firstName: "string",
+    lastName: "string",
+    type: "enum (Name)",
+  },
+  ProviderNccpaBoardCertificateInfoParameter: {
+    number: "string",
+    type: "enum (NccpaBoardCertificateInfo)",
+  },
+  ProviderNpiParameter: {
+    number: "integer (int64)",
+    type: "enum (Npi)",
+  },
+  ProviderSsnParameter: {
+    ssn: "string",
+    type: "enum (Ssn)",
+  },
+  ProviderTypeParameter: {
+    name: "string",
+    typeId: "string (uuid)",
+    type: "enum (ProviderType)",
+  },
+  FacilityAccreditationInfoParameter: {
+    accreditationNumber: "string",
+    accreditationProgram: "string",
+    type: "enum (FacilityAccreditationInfo)",
+  },
+  FacilityCmsCertificationInfoParameter: {
+    certificateNumber: "string",
+    certificateType: "string",
+    type: "enum (FacilityCmsCertificationInfo)",
+  },
+  FacilityNameParameter: {
+    name: "string",
+    type: "enum (FacilityName)",
+  },
+  SchoolCodeModel: {
+    code: "string",
+    branchCode: "string",
+    name: "string",
+    state: "enum (US states)",
+    city: "string",
+  },
+  SchoolCodePageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of SchoolCodeModel",
+    sortedBy: "enum (Name, Code)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Name, Code), Values: enum (Asc, Desc) }",
+  },
+
+  // Monitoring Models
+  MonitorRequestModel: {
+    type: "enum (Dataset, License)",
+    providerId: "string (uuid)",
+    datasetType: "enum (Dataset types, optional)",
+    licenseId: "string (uuid, optional)",
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly, optional)",
+    nextMonitoringDate: "string (date-time, optional)",
+    options: "DatasetScanOptions (optional)",
+    triggerImmediateVerification: "boolean (optional)",
+  },
+  MonitorModel: {
+    // Polymorphic type, depends on 'type' field
+    type: "enum (Dataset, License)",
+    // ... other properties based on the specific monitor type (DatasetMonitorModel, LicenseMonitorModel)
+  },
+  DatasetMonitorModel: {
+    id: "string (uuid)",
+    type: "enum (Dataset, License)",
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly)",
+    nextMonitoringDate: "string (date-time)",
+    lastMonitoringDate: "string (date-time)",
+    providerId: "string (uuid)",
+    datasetType: "enum (Dataset types)",
+    options: "DatasetScanOptions",
+    lastVerification: "DatasetScanModel",
+  },
+  LicenseMonitorModel: {
+    id: "string (uuid)",
+    type: "enum (Dataset, License)",
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly)",
+    nextMonitoringDate: "string (date-time)",
+    lastMonitoringDate: "string (date-time)",
+    providerId: "string (uuid)",
+    licenseId: "string (uuid)",
+    lastVerification: "LicenseVerificationModel",
+  },
+  MonitorPatchModel: {
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly, optional)",
+    nextMonitoringDate: "string (date-time, optional)",
+    triggerImmediateVerification: "boolean (optional)",
+  },
+  MonitorPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of MonitorModel",
+    sortedBy: "enum (Type, NextMonitoringDate)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Type, NextMonitoringDate), Values: enum (Asc, Desc) }",
+  },
+  MonitoringMetadata: {
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly)",
+    lastMonitoringDate: "string (date-time)",
+    nextMonitoringDate: "string (date-time)",
+    monitorId: "string (uuid)",
+  },
+  BulkSanctionsAndExclusionsMonitorsRequestModel: {
+    providerIds: "array of string (uuid)",
+    datasetInfos: "array of MonitorDatasetInfo",
+  },
+  MonitorDatasetInfo: {
+    datasetType: "enum (Dataset types)",
+    parameterSetId: "string (uuid, optional)",
+    monitoringInterval: "enum (Continuous, Daily, Weekly, Monthly, Yearly, optional)",
+    nextMonitoringDate: "string (date-time, optional)",
+  },
+  BulkSanctionsAndExclusionsMonitorsModel: {
+    createdMonitors: "array of BulkSanctionsAndExclusionsMonitorModel",
+    providerIds: "array of string (uuid)",
+  },
+  BulkSanctionsAndExclusionsMonitorModel: {
+    monitorId: "string (uuid)",
+    datasetType: "enum (Dataset types)",
+  },
+
+  // Alerts Models
+  AlertModel: {
+    type: "enum (LicenseChanged, LicenseExpiresSoon, LicenseExpired, ProfileImportCompleted)",
+    providerId: "string (uuid)",
+    provider: "ProviderModel",
+    entityType: "enum (License, Verification, Alert, NpiRecord, Note, BoardCertification, BoardCertificationVerification, DeaVerification, DatasetScan, DatasetRecord, File, ProfileImport, NpdbVerificationRequest)",
+    entityId: "string (uuid)",
+    data: "AlertData",
+    timestamp: "string (date-time)",
+    dismissalTimestamp: "string (date-time, optional)",
+    dismissalNote: "string",
+    id: "string (uuid)",
+  },
+  AlertPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of AlertModel",
+    sortedBy: "enum (Timestamp)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Timestamp), Values: enum (Asc, Desc) }",
+  },
+  AlertAggregationsModel: {
+    active: "integer (int32)",
+    dismissed: "integer (int32)",
+    licenseChanged: "integer (int32)",
+    licenseExpiresSoon: "integer (int32)",
+    licenseExpired: "integer (int32)",
+    profileImportCompleted: "integer (int32)",
+  },
+  AlertData: {
+    messageTemplate: "string",
+    messageParams: "object (string: string)",
+    data: "object (string: string)",
+  },
+  DismissRequestModel: {
+    dismissalNote: "string (optional)",
+  },
+
+  // Groups Models
+  GroupRequestModel: {
+    name: "string",
+    npi: "integer (int64, optional)",
+    taxId: "string (optional)",
+    remitAddress: "AddressModel (optional)",
+  },
+  GroupModel: {
+    id: "string (uuid)",
+    name: "string",
+    npi: "integer (int64, optional)",
+    taxId: "string (optional)",
+    remitAddress: "AddressModel",
+  },
+  GroupPatchModel: {
+    name: "string (optional)",
+    npi: "integer (int64, optional)",
+    taxId: "string (optional)",
+    remitAddress: "AddressModel (optional)",
+  },
+  GroupProviderRelationPatchModel: {
+    add: "array of string (uuid), optional",
+    remove: "array of string (uuid), optional",
+  },
+  GroupPayerRelationPatchModel: {
+    add: "array of string (uuid), optional",
+    remove: "array of string (uuid), optional",
+  },
+
+  // Payers Models
+  PayerRequestModel: {
+    name: "string",
+  },
+  PayerModel: {
+    id: "string (uuid)",
+    name: "string",
+  },
+  PayerPatchModel: {
+    name: "string (optional)",
+  },
+
+  // Payer Plans Models
+  PayerPlanRequestModel: {
+    payerId: "string (uuid)",
+    name: "string (optional)",
+    state: "enum (US states, optional)",
+  },
+  PayerPlanModel: {
+    id: "string (uuid)",
+    name: "string",
+    payerId: "string (uuid)",
+    state: "enum (US states)",
+    displayName: "string",
+  },
+  PayerPlanPatchModel: {
+    name: "string (optional)",
+    payerId: "string (uuid, optional)",
+    state: "enum (US states, optional)",
+  },
+
+  // Provider Enrollments Models
+  ProviderEnrollmentRequestModel: {
+    groupId: "string (uuid)",
+    payerPlanId: "string (uuid)",
+    providerId: "string (uuid)",
+    effectiveDate: "string (date-time, optional)",
+    enrollmentStatus: "enum (NotSubmitted, Submitted, Enrolled, Denied, optional)",
+    networkStatus: "enum (None, Par, NonPar, optional)",
+    specialistType: "enum (None, Pcp, Specialist, optional)",
+    submissionDate: "string (date-time, optional)",
+    closedDate: "string (date-time, optional)",
+    externalProviderPlanId: "string (optional)",
+    comments: "string (optional)",
+  },
+  ProviderEnrollmentModel: {
+    id: "string (uuid)",
+    payerPlanId: "string (uuid)",
+    groupId: "string (uuid)",
+    providerId: "string (uuid)",
+    enrollmentStatus: "enum (NotSubmitted, Submitted, Enrolled, Denied)",
+    submissionDate: "string (date-time)",
+    closedDate: "string (date-time)",
+    effectiveDate: "string (date-time)",
+    networkStatus: "enum (None, Par, NonPar)",
+    specialistType: "enum (None, Pcp, Specialist)",
+    externalProviderPlanId: "string",
+    comments: "string",
+    payerPlanModel: "PayerPlanModel",
+    groupModel: "GroupModel",
+  },
+  ProviderEnrollmentPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of ProviderEnrollmentModel",
+    sortedBy: "enum (Id, NetworkStatus, EnrollmentStatus, SpecialistType, SubmissionDate, EffectiveDate, PayerPlanName)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, NetworkStatus, EnrollmentStatus, SpecialistType, SubmissionDate, EffectiveDate, PayerPlanName), Values: enum (Asc, Desc) }",
+  },
+  ProviderEnrollmentPatchModel: {
+    payerPlanId: "string (uuid, optional)",
+    groupId: "string (uuid, optional)",
+    providerId: "string (uuid, optional)",
+    enrollmentStatus: "enum (NotSubmitted, Submitted, Enrolled, Denied, optional)",
+    submissionDate: "string (date-time, optional)",
+    closedDate: "string (date-time, optional)",
+    effectiveDate: "string (date-time, optional)",
+    networkStatus: "enum (None, Par, NonPar, optional)",
+    specialistType: "enum (None, Pcp, Specialist, optional)",
+    externalProviderPlanId: "string (optional)",
+    comments: "string (optional)",
+  },
+
+  // Integrations Models
+  FountainWebhookRequestModel: {
+    applicant: "FountainApplicantModel",
+  },
+  FountainWebhookResponseModel: {
+    requestId: "string (uuid)",
+  },
+  FountainApplicantModel: {
+    id: "string (uuid)",
+    email: "string",
+    first_name: "string",
+    last_name: "string",
+    date_of_birth: "string (date-time)",
+    data: "object",
+    stage: "FountainStage",
+    funnel: "FountainFunnel",
+    secure_data: "object",
+  },
+  FountainStage: {
+    title: "string",
+    id: "string (uuid)",
+  },
+  FountainFunnel: {
+    id: "string (uuid)",
+    title: "string",
+  },
+  SalesforceDocumentRequestRequestModel: {
+    document: "string",
+    pathOnClient: "string (optional)",
+    relatedIds: "array of string",
+  },
+
+  // Webhooks Models
+  WebhookRequestModel: {
+    type: "enum (Webhook types)",
+    url: "string (uri)",
+    secret: "string (optional)",
+    allowInsecureUrl: "boolean (optional)",
+    includeSensitiveInfo: "boolean (optional)",
+  },
+  WebhookModel: {
+    id: "string (uuid)",
+    type: "enum (Webhook types)",
+    url: "string (uri)",
+    allowInsecureUrl: "boolean",
+    includeSensitiveInfo: "boolean",
+  },
+  WebhookPatchModel: {
+    url: "string (uri, optional)",
+    secret: "string (optional)",
+    allowInsecureUrl: "boolean (optional)",
+    includeSensitiveInfo: "boolean (optional)",
+  },
+  WebhookLogModel: {
+    type: "enum (Webhook types)",
+    url: "string (uri)",
+    timestamp: "string (date-time)",
+    status: "enum (Triggered, Completed, Failed)",
+    attempt: "integer (int32)",
+    failureReason: "string",
+    payload: "string",
+    responseStatus: "integer (int32)",
+    responseTime: "integer (int32)",
+    responsePayload: "string",
+    responseHeaders: "object",
+    id: "string (uuid)",
+    traceId: "string (uuid)",
+    webhookId: "string (uuid)",
+  },
+  WebhooksLogPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of WebhookLogModel",
+    sortedBy: "enum (Timestamp)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Timestamp), Values: enum (Asc, Desc) }",
+  },
+  WebhookResponse: {
+    // Polymorphic type, depends on 'type' field
+    type: "enum (NpdbUpdateRequestRejectedWebhook, ConfigurableReportModel, ProviderModel, ProviderProfileImportModel, LicenseModel, DatasetScanModel, CredentialingRequestModel)",
+    // ... other properties based on the specific response type
+  },
+  NpdbUpdateRequestRejectedWebhook: {
+    message: "string",
+    providerId: "string (uuid)",
+    npdbVerificationRequestId: "string (uuid)",
+    rejectedParameters: "array of IProviderParameter",
+  },
+
+  // Audit Models
+  EventLogModel: {
+    id: "string (uuid)",
+    timestamp: "string (date-time)",
+    type: "enum (System, Request, Legacy)",
+    messageTemplate: "string",
+    messageParameters: "object",
+    correlationId: "string (uuid)",
+    context: "object",
+  },
+  EventLogPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of EventLogModel",
+    sortedBy: "enum (Timestamp, Type)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Timestamp, Type), Values: enum (Asc, Desc) }",
+  },
+
+  // Users Models
+  PasswordUpdateModel: {
+    password: "string (optional)",
+    newPassword: "string",
+  },
+  BaseUserModel: {
+    id: "string (uuid)",
+    email: "string",
+    firstName: "string",
+    lastName: "string",
+  },
+  UserRoleModel: {
+    id: "string (uuid)",
+    name: "string",
+    permissions: "object (string: enum (None, Read, Write, Allowed))",
+  },
+
+  // Reports Models
+  SanctionsAndExclusionsReportInfoModel: {
+    date: "string (date-time)",
+    path: "string",
+  },
+  EnrollmentsReportInfoModel: {
+    date: "string (date-time)",
+    path: "string",
+  },
+  ExpirableCredentialsReportInfoModel: {
+    date: "string (date-time)",
+    path: "string",
+  },
+  RosterReportInfoModel: {
+    date: "string (date-time)",
+    path: "string",
+  },
+  ConfigurableReportModel: {
+    id: "string (uuid)",
+    providerId: "string (uuid)",
+    facilityId: "string (uuid)",
+    type: "enum (Pdf)",
+    startedAt: "string (date-time)",
+    completedAt: "string (date-time)",
+    status: "enum (Pending, Working, Completed, Failed)",
+    failureReason: "FailureModel",
+    path: "string",
+    data: "ReportData",
+    credentialingRequestId: "string (uuid, optional)",
+  },
+  ReportData: {
+    state: "object",
+  },
+
+  // Credentialing Requests Models
+  CredentialingRequestProviderRequestModel: {
+    providerId: "string (uuid)",
+    type: "enum (Initial, ReCredentialing, optional)",
+    priority: "enum (Low, Medium, High, Urgent, optional)",
+    isSelfManaged: "boolean (optional)",
+  },
+  CredentialingRequestFacilityRequestModel: {
+    facilityId: "string (uuid)",
+    facilitySpecialtyIds: "array of string (uuid)",
+    type: "enum (Initial, ReCredentialing, optional)",
+    priority: "enum (Low, Medium, High, Urgent, optional)",
+    isSelfManaged: "boolean (optional)",
+  },
+  CredentialingRequestModel: {
+    id: "string (uuid)",
+    provider: "ProviderModel",
+    facility: "FacilityModel",
+    type: "enum (Initial, ReCredentialing)",
+    createdAt: "string (date-time)",
+    currentEvent: "CredentialingRequestEventModel",
+    allEvents: "array of CredentialingRequestEventModel",
+    priority: "enum (Low, Medium, High, Urgent)",
+    isSelfManaged: "boolean",
+    checklist: "CredentialingRequestChecklistModel",
+    owner: "BaseUserModel",
+    facilitySpecialtyIds: "array of string (uuid)",
+  },
+  CredentialingRequestPageModel: {
+    previousCursor: "string",
+    nextCursor: "string",
+    nextOffset: "integer (int32, deprecated)",
+    pageSize: "integer (int32)",
+    count: "integer (int32)",
+    totalCount: "integer (int32)",
+    items: "array of CredentialingRequestModel",
+    sortedBy: "enum (Id, CreatedAt, Priority, CurrentEventStatus, CurrentEventDate, ProviderId, ProviderFirstName, ProviderLastName, ProviderCredentialingStatus, FacilityId, FacilityName)",
+    sortDirection: "enum (Asc, Desc)",
+    sort: "{ Keys: enum (Id, CreatedAt, Priority, CurrentEventStatus, CurrentEventDate, ProviderId, ProviderFirstName, ProviderLastName, ProviderCredentialingStatus, FacilityId, FacilityName), Values: enum (Asc, Desc) }",
+  },
+  CredentialingRequestPatchModel: {
+    priority: "enum (Low, Medium, High, Urgent, optional)",
+    ownerId: "string (uuid, optional)",
+  },
+  CredentialingRequestEventRequestModel: {
+    note: "string (optional)",
+    status: "enum (RequestSubmitted, RequestInProgress, AdditionalInformationRequested, AdditionalInformationSubmitted, CancellationRequested, Cancelled, Completed, CompletedWithConcern, UnableToComplete, SecondAttemptMissingInfo, ThirdAttemptMissingInfo)",
+    attachments: "array of CredentialingRequestEventFileModel (optional)",
+    nextCredentialingDate: "string (date, optional)",
+  },
+  CredentialingRequestEventModel: {
+    id: "string (uuid)",
+    description: "string",
+    note: "string",
+    timestamp: "string (date-time)",
+    status: "enum (RequestSubmitted, RequestInProgress, AdditionalInformationRequested, AdditionalInformationSubmitted, CancellationRequested, Cancelled, Completed, CompletedWithConcern, UnableToComplete, SecondAttemptMissingInfo, ThirdAttemptMissingInfo)",
+    attachments: "array of CredentialingRequestEventFileModel",
+    user: "CredentialingRequestEventUserModel",
+  },
+  CredentialingRequestEventFileModel: {
+    path: "string",
+    type: "enum (CredentialingPacket)",
+  },
+  CredentialingRequestEventUserModel: {
+    id: "string (uuid)",
+    email: "string",
+  },
+  CredentialingRequestAggregationModel: {
+    total: "integer (int32)",
+    aggregations: "object (string: integer)",
+  },
+  FacilityCredentialingDataModel: {
+    facility: "FacilityModel",
+    facilitySpecialties: "array of FacilitySpecialityModel",
+    facilityInfo: "object",
+    childFacilities: "array of FacilityModel",
+    datasetScans: "array of DatasetScanModel",
+    files: "array of FileModel",
+  },
+  ProviderCredentialingDataModel: {
+    providerInfo: "object",
+    licenseVerifications: "array of LicenseVerificationModel",
+    datasetScans: "array of DatasetScanModel",
+    files: "array of FileModel",
+    profiles: "array of ProviderProfileImportModel",
+  },
+  CredentialingRequestChecklistRequestModel: {
+    notes: "string (optional)",
+    items: "array of CredentialingRequestChecklistItemRequestModel (optional)",
+    details: "ChecklistDetailsRequestModel (optional)",
+  },
+  CredentialingRequestChecklistModel: {
+    id: "string (uuid)",
+    requestId: "string (uuid)",
+    notes: "string",
+    items: "array of CredentialingRequestChecklistItemModel",
+    details: "ChecklistDetailsModel",
+  },
+  CredentialingRequestChecklistItemRequestModel: {
+    name: "string",
+    status: "string",
+    confirmedAt: "string (date-time, optional)",
+    confirmedBy: "string (optional)",
+    verifiedAt: "string (date-time, optional)",
+    source: "string (optional)",
+    references: "CredentialingRequestChecklistReference (optional)",
+  },
+  CredentialingRequestChecklistItemModel: {
+    id: "string (uuid)",
+    name: "string",
+    confirmedAt: "string (date-time)",
+    confirmedBy: "string",
+    verifiedAt: "string (date-time)",
+    status: "string",
+    source: "string",
+    references: "CredentialingRequestChecklistReference",
+  },
+  CredentialingRequestChecklistReference: {
+    providerInfo: "array of CredentialingRequestChecklistProviderInfoReference (optional)",
+    facilityInfo: "array of CredentialingRequestChecklistFacilityInfoReference (optional)",
+    licenseVerifications: "array of CredentialingRequestChecklistLicenseVerificationReference (optional)",
+    datasetScans: "array of CredentialingRequestChecklistDatasetScanReference (optional)",
+    files: "array of CredentialingRequestChecklistFileReference (optional)",
+    profiles: "array of CredentialingRequestChecklistProfileReference (optional)",
+    facilitySpecialties: "array of CredentialingRequestChecklistFacilitySpecialtyReference (optional)",
+  },
+  CredentialingRequestChecklistProviderInfoReference: {
+    providerInfoId: "string (uuid)",
+    providerInfoType: "enum (BasicInfo, Caqh, LiabilityInsurance, Education, Training, WorkHistory, DeaRegistrations, Licenses, BoardCertifications, Certificates)",
+  },
+  CredentialingRequestChecklistFacilityInfoReference: {
+    facilityInfoId: "string (uuid)",
+    facilityInfoType: "enum (Npi, Dea, LiabilityInsurance, License, Accreditation, CmsCertification, MedicareEnrollment)",
+  },
+  CredentialingRequestChecklistLicenseVerificationReference: {
+    licenseId: "string (uuid)",
+    licenseVerificationId: "string (uuid)",
+  },
+  CredentialingRequestChecklistDatasetScanReference: {
+    datasetScanId: "string (uuid)",
+  },
+  CredentialingRequestChecklistFileReference: {
+    filePath: "string",
+  },
+  CredentialingRequestChecklistProfileReference: {
+    profileId: "string (uuid)",
+  },
+  CredentialingRequestChecklistFacilitySpecialtyReference: {
+    facilitySpecialtyId: "string (uuid)",
+  },
+  ChecklistDetailsModel: {
+    organization: "string",
+    providerType: "string",
+    providerName: "string",
+    started: "string (date-time)",
+    completed: "string (date-time)",
+  },
+  ChecklistDetailsRequestModel: {
+    organization: "string (optional)",
+    providerType: "string (optional)",
+    providerName: "string (optional)",
+    started: "string (date-time, optional)",
+    completed: "string (date-time, optional)",
+  },
+
+  // NPDB Transfer
+  TransferNpdbRequestModel: {
+    databankSubjectId: "string",
+    parameterSetId: "string (uuid, optional)",
+  },
+  TransferNpdbResponseModel: {
+    monitor: "DatasetMonitorModel",
+  },
+
+  // General Utility Models (used across multiple sections)
+  ProblemDetails: {
+    type: "string",
+    title: "string",
+    status: "integer (int32)",
+    detail: "string",
+    instance: "string",
+  },
+  SensitiveString: "string (masked)",
+  MatchScore: {
+    score: "number (double)",
+    recommendation: "enum (Mismatch, Match)",
+  },
+  FlexibleDataModel: {
+    type: "enum (Form, Table, Section)",
+    data: "object", // Actual schema depends on 'type'
+  },
+  NoContentResult: {
+    statusCode: "integer (int32)",
+  },
+};
+
+/**
+ * @class VerifiableApiClient
+ * @description A simulated client for the Verifiable API.
+ * Provides methods to interact with various API endpoints.
+ */
+class VerifiableApiClient {
+  constructor(baseUrl = BASE_URL) {
+    this.baseUrl = baseUrl;
+    // In a real application, you would manage authentication tokens here.
+    this.accessToken = null;
+  }
+
+  /**
+   * Sets the access token for authenticated API calls.
+   * @param {string} token The access token.
+   */
+  setAccessToken(token) {
+    this.accessToken = token;
+  }
+
+  /**
+   * Helper function to make a simulated API request.
+   * In a real application, this would use `fetch` and handle network requests.
+   * @param {string} method HTTP method (GET, POST, PUT, PATCH, DELETE).
+   * @param {string} path API endpoint path.
+   * @param {object} [params={}] Path and query parameters.
+   * @param {object} [body=null] Request body.
+   * @returns {Promise<object>} A promise that resolves with mock data or rejects with an error.
+   */
+  _simulateRequest(method, path, params = {}, body = null) {
+    return new Promise((resolve, reject) => {
+      console.log(`Simulating API call: ${method} ${path}`);
+      console.log("Parameters:", params);
+      console.log("Body:", body);
+
+      // Simulate network delay
+      setTimeout(() => {
+        // Mock success response
+        const mockResponse = this._generateMockResponse(path, method, body);
+        if (mockResponse) {
+          resolve(mockResponse);
+        } else {
+          // Simulate a generic error for unsupported or undefined mocks
+          reject(new Error(`No mock response defined for ${method} ${path}`));
+        }
+      }, 500); // Simulate 500ms network delay
+    });
+  }
+
+  /**
+   * Generates a mock response based on the endpoint and method.
+   * This is a placeholder and should be expanded for more realistic mocks.
+   * @param {string} path The API path.
+   * @param {string} method The HTTP method.
+   * @param {object} requestBody The request body, if any.
+   * @returns {object|null} Mock response data, or null if no mock is available.
+   */
+  _generateMockResponse(path, method, requestBody) {
+    // A simple mock response generator.
+    // In a real scenario, you'd have more sophisticated mock data generation
+    // based on the OpenAPI schemas.
+
+    // Helper to generate a UUID
+    const generateUuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+
+    const now = new Date().toISOString();
+
+    // Mock responses for specific endpoints
+    if (path.includes("/auth/token/password") && method === "POST") {
+      return {
+        tokenId: generateUuid(),
+        token: "mockAccessToken_xyz123",
+        email: requestBody.email,
+        role: { id: generateUuid(), name: "admin", permissions: { "all": "Allowed" } },
+        expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(), // 1 hour from now
+        persistenceHint: "Persistent",
+      };
+    } else if (path.includes("/providers") && method === "POST") {
+        return {
+            id: generateUuid(),
+            firstName: requestBody.firstName,
+            lastName: requestBody.lastName,
+            credentialingStatus: "Data Collection",
+            createdAt: now,
+            deactivated: false,
+            // ... other default fields for a new provider
+        };
+    } else if (path.includes("/providers") && method === "GET") {
+        return {
+            items: [{
+                id: generateUuid(),
+                firstName: "John",
+                lastName: "Doe",
+                credentialingStatus: "Active",
+                createdAt: now,
+                deactivated: false,
+            }],
+            totalCount: 1,
+            count: 1,
+            pageSize: 10,
+            nextCursor: null,
+            previousCursor: null,
+            sortedBy: "Id",
+            sortDirection: "Asc",
+        };
+    } else if (path.includes("/licensetypes") && method === "GET") {
+        return {
+            items: [{
+                id: generateUuid(),
+                taxonomy: "Medical Physician & Surgeon",
+                name: "Medical Physician & Surgeon",
+                aliases: [],
+                abbreviations: [],
+                sources: [{
+                    state: "MO",
+                    requiredParameters: ["LicenseNumber"],
+                    optionalParameters: ["Name"],
+                    hasPassThroughFee: false
+                }]
+            }],
+            totalCount: 1,
+            count: 1,
+            pageSize: 100,
+            nextCursor: null,
+            previousCursor: null,
+            sortedBy: "Taxonomy",
+            sortDirection: "Asc",
+        };
+    } else if (path.includes("/providers/") && path.includes("/licenses") && method === "POST") {
+        return {
+            providerId: params.providerId,
+            licenseNumber: requestBody.licenseNumber,
+            licenseType: {
+                id: requestBody.licenseTypeId,
+                name: "Mock License Type"
+            },
+            jobStatus: "Pending",
+            id: generateUuid(),
+            state: requestBody.state,
+            isCurrentlyPracticing: requestBody.isCurrentlyPracticing || false,
+            prescriptiveAuthority: requestBody.prescriptiveAuthority || "NotRequired",
+            collaboratingProviderId: requestBody.collaboratingProviderId || null,
+            currentVerificationStatus: "Pending"
+        };
+    } else if (path.includes("/providers/") && path.includes("/licenses/") && method === "GET") {
+        return {
+            providerId: params.providerId,
+            licenseNumber: "123456",
+            firstName: "John",
+            lastName: "Doe",
+            state: "MO",
+            jobStatus: "Idle",
+            nonVerifiedInfo: {
+                issueDate: "2020-01-01T00:00:00Z",
+                expirationDate: "2025-01-01T00:00:00Z",
+                status: "Active"
+            },
+            currentVerificationStatus: "Found",
+            currentVerification: {
+                id: generateUuid(),
+                originalStatus: "Found",
+                status: "Found",
+                trigger: "Manual",
+                started: now,
+                processingTime: 1000,
+                results: [],
+                additionalVerificationParameters: [],
+                verificationSource: {
+                    name: "Mock Source",
+                    url: "https://mock.source.com",
+                    hasPassThroughFee: false
+                },
+                failureReason: null,
+                correctResultIndex: 0,
+                export: `/files/exports/${generateUuid()}.pdf`,
+                monitoringMetadata: null
+            },
+            restrictionStatus: "None",
+            approvedStatus: "Pending",
+            isPrimary: true,
+            id: params.licenseId,
+            isCurrentlyPracticing: true,
+            prescriptiveAuthority: "NotRequired",
+            collaboratingProviderId: null,
+            licenseType: {
+                id: generateUuid(),
+                taxonomy: "Medical Physician & Surgeon",
+                name: "Medical Physician & Surgeon",
+                aliases: [],
+                abbreviations: [],
+                sources: []
+            }
+        };
+    }
+    // Add more mock responses for other endpoints as needed
+    return null;
+  }
+
+  /**
+   * Authentication Endpoints
+   */
+
+  /**
+   * Password Authentication
+   * @param {Models.PasswordAuthModel} body
+   * @returns {Promise<Models.AuthResponseModel>}
+   */
+  async passwordAuth(body) {
+    return this._simulateRequest("POST", "/auth/token/password", {}, body);
+  }
+
+  /**
+   * Resets a password
+   * @param {Models.PasswordResetRequestModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async passwordReset(body) {
+    return this._simulateRequest("POST", "/auth/password/reset", {}, body);
+  }
+
+  /**
+   * Requests a password reset
+   * @param {Models.RequestPasswordResetRequestModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async requestPasswordReset(body) {
+    return this._simulateRequest("POST", "/auth/password/requestreset", {}, body);
+  }
+
+  /**
+   * Google Authentication
+   * @param {Models.GoogleAuthModel} body
+   * @returns {Promise<Models.AuthResponseModel>}
+   */
+  async googleAuth(body) {
+    return this._simulateRequest("POST", "/auth/token/google", {}, body);
+  }
+
+  /**
+   * List active access tokens
+   * @param {object} [query={}] Query parameters (sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.AccessTokenPageModel>}
+   */
+  async listActiveAccessTokens(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/auth/token?${queryString}`);
+  }
+
+  /**
+   * Invalidate an access token
+   * @param {string} tokenId The unique identifier of the access token to be invalidated.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async invalidateAccessToken(tokenId) {
+    return this._simulateRequest("POST", `/auth/token/${tokenId}/invalidate`);
+  }
+
+  /**
+   * Invalidate multiple access tokens
+   * @param {Models.InvalidateAllAccessTokensRequestModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async invalidateAccessTokens(body) {
+    return this._simulateRequest("POST", "/auth/token/invalidate", {}, body);
+  }
+
+  /**
+   * Definitions Endpoints
+   */
+
+  /**
+   * List countries
+   * @returns {Promise<Array<Models.CountryModel>>}
+   */
+  async listCountries() {
+    return this._simulateRequest("GET", "/countries");
+  }
+
+  /**
+   * Providers Endpoints
+   */
+
+  /**
+   * Create a new provider
+   * @param {Models.ProviderRequestModel} body
+   * @returns {Promise<Models.ProviderModel>}
+   */
+  async createProvider(body) {
+    return this._simulateRequest("POST", "/providers", {}, body);
+  }
+
+  /**
+   * List providers
+   * @param {object} [query={}] Query parameters (status, providerName, credentialingStatus, providerTypeId, npi, deactivated, nextCredentialingDateOnOrAfter, nextCredentialingDateOnOrBefore, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderPageModel>}
+   */
+  async listProviders(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers?${queryString}`);
+  }
+
+  /**
+   * Get an existing provider
+   * @param {string} providerId Identifier of the provider to get the data for.
+   * @returns {Promise<Models.ProviderModel>}
+   */
+  async getProvider(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}`);
+  }
+
+  /**
+   * Patch an existing provider
+   * @param {string} providerId Identifier of the provider to patch.
+   * @param {Models.ProviderPatchModel} body
+   * @returns {Promise<Models.ProviderModel>}
+   */
+  async patchProvider(providerId, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing provider
+   * @param {string} providerId Identifier of the provider to get the data for.
+   * @param {object} [query={}] Query parameters (cancelNpdbContinuousQuery)
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProvider(providerId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("DELETE", `/providers/${providerId}?${queryString}`);
+  }
+
+  /**
+   * Get provider aggregations
+   * @param {object} [query={}] Query parameters (providerDeactivated)
+   * @returns {Promise<Models.ProviderAggregationsModel>}
+   */
+  async getProviderAggregations(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/aggregations?${queryString}`);
+  }
+
+  /**
+   * List provider types
+   * @returns {Promise<Array<Models.ProviderTypeModel>>}
+   */
+  async listProviderTypes() {
+    return this._simulateRequest("GET", "/providertypes");
+  }
+
+  /**
+   * List providers due for recredentialing
+   * @param {object} [query={}] Query parameters (includeUnassigned, providerName, providerNpi, credentialingRequestOwnerId, credentialingRequestEventStatus, nextCredentialingDateOnOrAfter, nextCredentialingDateOnOrBefore, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderDueForRecredentialingPageModel>}
+   */
+  async listProvidersDueForRecredentialing(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/recredentialing/due?${queryString}`);
+  }
+
+  /**
+   * Get provider sanctions and exclusions monitoring categories aggregations
+   * @returns {Promise<Models.ProviderMonitoringSanctionsAndExclusionsSummaryAggregationsModel>}
+   */
+  async getProviderMonitoringSanctionsAndExclusionsSummaryAggregations() {
+    return this._simulateRequest("GET", "/providers/monitoring/sanctions-and-exclusions/aggregations");
+  }
+
+  /**
+   * List provider monitoring summary for sanctions and exclusions
+   * @param {object} [query={}] Query parameters (name, npi, credentialingStatus, monitoringCategory, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderMonitoringSanctionsAndExclusionsSummaryPageModel>}
+   */
+  async listProviderMonitoringSanctionsAndExclusionsSummary(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/monitoring/sanctions-and-exclusions?${queryString}`);
+  }
+
+  /**
+   * Initiate an NPDB enrollment transfer for a provider
+   * @param {string} providerId
+   * @param {Models.TransferNpdbRequestModel} body
+   * @returns {Promise<Models.TransferNpdbResponseModel>}
+   */
+  async transferNpdbEnrollment(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/npdb/transfer-enrollment`, {}, body);
+  }
+
+  /**
+   * ProvidersInfo Endpoints
+   */
+
+  /**
+   * Get info for the existing provider
+   * @param {string} providerId Identifier of the provider to get the data for.
+   * @param {object} [query={}] Query parameters (providerInfoType)
+   * @returns {Promise<object>}
+   */
+  async getProviderInfo(providerId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/${providerId}/info?${queryString}`);
+  }
+
+  /**
+   * Create or replace caqh login info for the existing provider
+   * @param {string} providerId
+   * @param {Models.CaqhLoginInfoRequestModel} body
+   * @returns {Promise<Models.CaqhLoginInfoModel>}
+   */
+  async putProviderCaqhInfo(providerId, body) {
+    return this._simulateRequest("PUT", `/providers/${providerId}/info/caqh`, {}, body);
+  }
+
+  /**
+   * Change an existing provider's CAQH login info
+   * @param {string} providerId
+   * @param {Models.CaqhLoginInfoRequestModel} body
+   * @returns {Promise<Models.CaqhLoginInfoModel>}
+   */
+  async patchProviderCaqhInfo(providerId, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/caqh`, {}, body);
+  }
+
+  /**
+   * Delete existing CAQH login info for the existing provider
+   * @param {string} providerId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderCaqhInfo(providerId) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/caqh`);
+  }
+
+  /**
+   * Get CAQH login info for a provider
+   * @param {string} providerId
+   * @returns {Promise<Models.CaqhLoginInfoModel>}
+   */
+  async getProviderCaqhInfo(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/caqh`);
+  }
+
+  /**
+   * Change an existing provider's alias
+   * @param {string} providerId
+   * @param {string} aliasId
+   * @param {Models.ProviderAliasRequestModel} body
+   * @returns {Promise<Models.ProviderAliasModel>}
+   */
+  async putProviderAliasInfo(providerId, aliasId, body) {
+    return this._simulateRequest("PUT", `/providers/${providerId}/info/aliases/${aliasId}`, {}, body);
+  }
+
+  /**
+   * Get alias for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.ProviderAliasModel>}
+   */
+  async getProviderAliasInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/aliases/${id}`);
+  }
+
+  /**
+   * Delete existing alias for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderAliasInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/aliases/${id}`);
+  }
+
+  /**
+   * Create board certification info for the existing provider
+   * @param {string} providerId
+   * @param {Models.BoardCertificationInfoRequestModel} body
+   * @returns {Promise<Models.BoardCertificationInfoModel>}
+   */
+  async createBoardCertificationInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/boardCertifications`, {}, body);
+  }
+
+  /**
+   * List board certifications
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.BoardCertificationInfoModel>>}
+   */
+  async listBoardCertificationsInfo(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/boardCertifications`);
+  }
+
+  /**
+   * Get board certification for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.BoardCertificationInfoModel>}
+   */
+  async getBoardCertificationInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/boardCertifications/${id}`);
+  }
+
+  /**
+   * Change an existing provider's board certification info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.BoardCertificationInfoPatchModel} body
+   * @returns {Promise<Models.BoardCertificationInfoModel>}
+   */
+  async patchBoardCertificationInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/boardCertifications/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing board certification info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteBoardCertificationInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/boardCertifications/${id}`);
+  }
+
+  /**
+   * Create certificate info for the existing provider
+   * @param {string} providerId
+   * @param {Models.CertificateInfoRequestModel} body
+   * @returns {Promise<Models.CertificateInfoModel>}
+   */
+  async createCertificateInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/certificates`, {}, body);
+  }
+
+  /**
+   * List certificates
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.CertificateInfoModel>>}
+   */
+  async listCertificateInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/certificates`);
+  }
+
+  /**
+   * Get certificate for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.CertificateInfoModel>}
+   */
+  async getCertificateInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/certificates/${id}`);
+  }
+
+  /**
+   * Change an existing provider's certificate info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.CertificateInfoPatchModel} body
+   * @returns {Promise<Models.CertificateInfoModel>}
+   */
+  async patchCertificateInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/certificates/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing certificate info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteCertificateInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/certificates/${id}`);
+  }
+
+  /**
+   * Create liability insurance info for the existing provider
+   * @param {string} providerId
+   * @param {Models.LiabilityInsuranceRequestModel} body
+   * @returns {Promise<Models.LiabilityInsuranceModel>}
+   */
+  async createProviderLiabilityInsurance(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/liabilityInsurances`, {}, body);
+  }
+
+  /**
+   * List liability insurances
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.LiabilityInsuranceModel>>}
+   */
+  async listProviderLiabilityInsuranceInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/liabilityInsurances`);
+  }
+
+  /**
+   * Get liability insurance for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.LiabilityInsuranceModel>}
+   */
+  async getProviderLiabilityInsuranceInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/liabilityInsurances/${id}`);
+  }
+
+  /**
+   * Change an existing provider's liability insurance
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.LiabilityInsurancePatchModel} body
+   * @returns {Promise<Models.LiabilityInsuranceModel>}
+   */
+  async patchProviderLiabilityInsuranceInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/liabilityInsurances/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing liability insurance info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderLiabilityInsuranceInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/liabilityInsurances/${id}`);
+  }
+
+  /**
+   * Create education info for the existing provider
+   * @param {string} providerId
+   * @param {Models.EducationRequestModel} body
+   * @returns {Promise<Models.EducationModel>}
+   */
+  async createProviderEducationInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/educations`, {}, body);
+  }
+
+  /**
+   * List educations
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.EducationModel>>}
+   */
+  async listProviderEducationInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/educations`);
+  }
+
+  /**
+   * Get education for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.EducationModel>}
+   */
+  async getProviderEducationInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/educations/${id}`);
+  }
+
+  /**
+   * Change an existing provider's education info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.EducationPatchModel} body
+   * @returns {Promise<Models.EducationModel>}
+   */
+  async patchProviderEducationInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/educations/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing education info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderEducationInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/educations/${id}`);
+  }
+
+  /**
+   * Create training info for the existing provider
+   * @param {string} providerId
+   * @param {Models.TrainingRequestModel} body
+   * @returns {Promise<Models.TrainingModel>}
+   */
+  async createProviderTrainingInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/trainings`, {}, body);
+  }
+
+  /**
+   * List trainings
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.TrainingModel>>}
+   */
+  async listProviderTrainingInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/trainings`);
+  }
+
+  /**
+   * Get training for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.TrainingModel>}
+   */
+  async getProviderTrainingInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/trainings/${id}`);
+  }
+
+  /**
+   * Change an existing provider's training info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.TrainingPatchModel} body
+   * @returns {Promise<Models.TrainingModel>}
+   */
+  async patchProviderTrainingInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/trainings/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing training info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderTrainingInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/trainings/${id}`);
+  }
+
+  /**
+   * Create work history info for the existing provider
+   * @param {string} providerId
+   * @param {Models.WorkHistoryRequestModel} body
+   * @returns {Promise<Models.WorkHistoryModel>}
+   */
+  async createProviderWorkHistoryInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/workHistory`, {}, body);
+  }
+
+  /**
+   * List work history entries
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.WorkHistoryModel>>}
+   */
+  async listProviderWorkHistoryInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/workHistory`);
+  }
+
+  /**
+   * Get work history for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.WorkHistoryModel>}
+   */
+  async getProviderWorkHistoryInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/workHistory/${id}`);
+  }
+
+  /**
+   * Change an existing provider's work history info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.WorkHistoryPatchModel} body
+   * @returns {Promise<Models.WorkHistoryModel>}
+   */
+  async patchProviderWorkHistoryInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/workHistory/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing work history info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderWorkHistoryInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/workHistory/${id}`);
+  }
+
+  /**
+   * Create DEA registration info for the existing provider
+   * @param {string} providerId
+   * @param {Models.DeaRegistrationInfoRequestModel} body
+   * @returns {Promise<Models.DeaRegistrationInfoModel>}
+   */
+  async createDeaRegistrationInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/dea`, {}, body);
+  }
+
+  /**
+   * List DEA registrations
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.DeaRegistrationInfoModel>>}
+   */
+  async listDeaRegistrationInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/dea`);
+  }
+
+  /**
+   * Delete existing DEA registration info for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteDeaRegistrationInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/dea/${id}`);
+  }
+
+  /**
+   * Get DEA registration for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.DeaRegistrationInfoModel>}
+   */
+  async getDeaRegistrationInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/dea/${id}`);
+  }
+
+  /**
+   * Change an existing provider's DEA registration info
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.DeaRegistrationInfoPatchModel} body
+   * @returns {Promise<Models.DeaRegistrationInfoModel>}
+   */
+  async patchDeaRegistrationInfo(providerId, id, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/info/dea/${id}`, {}, body);
+  }
+
+  /**
+   * Create address for an existing provider
+   * @param {string} providerId
+   * @param {Models.ProviderAddressRequestModel} body
+   * @returns {Promise<Models.ProviderAddressModel>}
+   */
+  async createProviderAddressInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/addresses`, {}, body);
+  }
+
+  /**
+   * List addresses
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.ProviderAddressModel>>}
+   */
+  async listProviderAddressInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/addresses`);
+  }
+
+  /**
+   * Delete existing address for a provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderAddressInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/addresses/${id}`);
+  }
+
+  /**
+   * Get address for an existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.ProviderAddressModel>}
+   */
+  async getProviderAddressInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/addresses/${id}`);
+  }
+
+  /**
+   * Change an existing provider's address
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.ProviderAddressRequestModel} body
+   * @returns {Promise<Models.ProviderAddressModel>}
+   */
+  async putProviderAddressInfo(providerId, id, body) {
+    return this._simulateRequest("PUT", `/providers/${providerId}/info/addresses/${id}`, {}, body);
+  }
+
+  /**
+   * List aliases
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.ProviderAliasModel>>}
+   */
+  async listProviderAliasInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/aliases`);
+  }
+
+  /**
+   * Create alias for an existing provider
+   * @param {string} providerId
+   * @param {Models.ProviderAliasRequestModel} body
+   * @returns {Promise<Models.ProviderAliasModel>}
+   */
+  async createProviderAliasInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/aliases`, {}, body);
+  }
+
+  /**
+   * Create email for an existing provider
+   * @param {string} providerId
+   * @param {Models.ProviderEmailRequestModel} body
+   * @returns {Promise<Models.ProviderEmailModel>}
+   */
+  async createProviderEmailInfo(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/info/emails`, {}, body);
+  }
+
+  /**
+   * List emails
+   * @param {string} providerId
+   * @returns {Promise<Array<Models.ProviderEmailModel>>}
+   */
+  async listProviderEmailInfos(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/emails`);
+  }
+
+  /**
+   * Delete existing email for a provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderEmailInfo(providerId, id) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/info/emails/${id}`);
+  }
+
+  /**
+   * Get email for the existing provider
+   * @param {string} providerId
+   * @param {string} id
+   * @returns {Promise<Models.ProviderEmailModel>}
+   */
+  async getProviderEmailInfo(providerId, id) {
+    return this._simulateRequest("GET", `/providers/${providerId}/info/emails/${id}`);
+  }
+
+  /**
+   * Change an existing provider's email
+   * @param {string} providerId
+   * @param {string} id
+   * @param {Models.ProviderEmailRequestModel} body
+   * @returns {Promise<Models.ProviderEmailModel>}
+   */
+  async putProviderEmailInfo(providerId, id, body) {
+    return this._simulateRequest("PUT", `/providers/${providerId}/info/emails/${id}`, {}, body);
+  }
+
+  /**
+   * Facilities Endpoints
+   */
+
+  /**
+   * Create a new facility
+   * @param {Models.FacilityRequestModel} body
+   * @returns {Promise<Models.FacilityModel>}
+   */
+  async createFacility(body) {
+    return this._simulateRequest("POST", "/facilities", {}, body);
+  }
+
+  /**
+   * List facilities
+   * @param {object} [query={}] Query parameters (name, deactivated, parentFacilityId, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FacilityPageModel>}
+   */
+  async listFacilities(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities?${queryString}`);
+  }
+
+  /**
+   * Get an existing facility
+   * @param {string} facilityId Identifier of the facility to get the data for.
+   * @returns {Promise<Models.FacilityModel>}
+   */
+  async getFacility(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}`);
+  }
+
+  /**
+   * Patch an existing facility
+   * @param {string} facilityId Identifier of the facility to patch.
+   * @param {Models.FacilityPatchModel} body
+   * @returns {Promise<Models.FacilityModel>}
+   */
+  async patchFacility(facilityId, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}`, {}, body);
+  }
+
+  /**
+   * List facility license types
+   * @param {object} [query={}] Query parameters (name, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FacilityLicenseTypePageModel>}
+   */
+  async listFacilityLicenseTypes(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/license-types?${queryString}`);
+  }
+
+  /**
+   * List facility accreditations
+   * @param {object} [query={}] Query parameters (agencyName, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FacilityAccreditationAgencyPageModel>}
+   */
+  async listFacilityAccreditations(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/accreditations?${queryString}`);
+  }
+
+  /**
+   * List facility medicare enrollment types
+   * @param {object} [query={}] Query parameters (id, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.MedicareEnrollmentTypePageModel>}
+   */
+  async listFacilityMedicareEnrollmentTypes(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/medicare-enrollment-types?${queryString}`);
+  }
+
+  /**
+   * List facility taxonomies
+   * @param {object} [query={}] Query parameters (code, name, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FacilityTaxonomyPageModel>}
+   */
+  async listFacilityTaxonomies(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/taxonomies?${queryString}`);
+  }
+
+  /**
+   * FacilitiesInfo Endpoints
+   */
+
+  /**
+   * Get info for the existing facility
+   * @param {string} facilityId Identifier of the facility to get the data for.
+   * @param {object} [query={}] Query parameters (facilityInfoTypes)
+   * @returns {Promise<object>}
+   */
+  async getFacilityInfo(facilityId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info?${queryString}`);
+  }
+
+  /**
+   * Create a NPI for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityNpiRequestModel} body
+   * @returns {Promise<Models.FacilityNpiModel>}
+   */
+  async createFacilityNpiInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/npis`, {}, body);
+  }
+
+  /**
+   * List facility's NPIs
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityNpiModel>>}
+   */
+  async listFacilityNpiInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/npis`);
+  }
+
+  /**
+   * Get NPI for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityNpiModel>}
+   */
+  async getFacilityNpiInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/npis/${id}`);
+  }
+
+  /**
+   * Change an existing facility's NPI
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityNpiPatchModel} body
+   * @returns {Promise<Models.FacilityNpiModel>}
+   */
+  async patchFacilityNpiInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/npis/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing NPI for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityNpiInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/npis/${id}`);
+  }
+
+  /**
+   * Create a DEA for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityDeaRequestModel} body
+   * @returns {Promise<Models.FacilityDeaModel>}
+   */
+  async createFacilityDeaInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/deas`, {}, body);
+  }
+
+  /**
+   * List facility's DEAs
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityDeaModel>>}
+   */
+  async listFacilityDeaInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/deas`);
+  }
+
+  /**
+   * Get DEA for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityDeaModel>}
+   */
+  async getFacilityDeaInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/deas/${id}`);
+  }
+
+  /**
+   * Change an existing facility's DEA
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityDeaPatchModel} body
+   * @returns {Promise<Models.FacilityDeaModel>}
+   */
+  async patchFacilityDeaInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/deas/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing DEA for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityDeaInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/deas/${id}`);
+  }
+
+  /**
+   * Create a Liability Insurance for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityLiabilityInsuranceRequestModel} body
+   * @returns {Promise<Models.FacilityLiabilityInsuranceModel>}
+   */
+  async createFacilityLiabilityInsuranceInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/liabilityInsurances`, {}, body);
+  }
+
+  /**
+   * List facility's Liability Insurances
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityLiabilityInsuranceModel>>}
+   */
+  async listFacilityLiabilityInsuranceInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/liabilityInsurances`);
+  }
+
+  /**
+   * Get Liability Insurance for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityLiabilityInsuranceModel>}
+   */
+  async getFacilityLiabilityInsuranceInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/liabilityInsurances/${id}`);
+  }
+
+  /**
+   * Change an existing facility's Liability Insurance
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityLiabilityInsurancePatchModel} body
+   * @returns {Promise<Models.FacilityLiabilityInsuranceModel>}
+   */
+  async patchFacilityLiabilityInsuranceInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/liabilityInsurances/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing Liability Insurance for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityLiabilityInsuranceInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/liabilityInsurances/${id}`);
+  }
+
+  /**
+   * Create a License for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityLicenseRequestModel} body
+   * @returns {Promise<Models.FacilityLicenseModel>}
+   */
+  async createFacilityLicenseInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/licenses`, {}, body);
+  }
+
+  /**
+   * List facility's Licenses
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityLicenseModel>>}
+   */
+  async listFacilityLicenseInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/licenses`);
+  }
+
+  /**
+   * Get License for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityLicenseModel>}
+   */
+  async getFacilityLicenseInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/licenses/${id}`);
+  }
+
+  /**
+   * Change an existing facility's License
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityLicensePatchModel} body
+   * @returns {Promise<Models.FacilityLicenseModel>}
+   */
+  async patchFacilityLicenseInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/licenses/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing License for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityLicenseInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/licenses/${id}`);
+  }
+
+  /**
+   * Create an Accreditation for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityAccreditationRequestModel} body
+   * @returns {Promise<Models.FacilityAccreditationModel>}
+   */
+  async createFacilityAccreditationInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/accreditations`, {}, body);
+  }
+
+  /**
+   * List facility's Accreditations
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityAccreditationModel>>}
+   */
+  async listFacilityAccreditationInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/accreditations`);
+  }
+
+  /**
+   * Get Accreditation for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityAccreditationModel>}
+   */
+  async getFacilityAccreditationInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/accreditations/${id}`);
+  }
+
+  /**
+   * Change an existing facility's Accreditation
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityAccreditationPatchModel} body
+   * @returns {Promise<Models.FacilityAccreditationModel>}
+   */
+  async patchFacilityAccreditationInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/accreditations/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing Accreditation for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityAccreditationInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/accreditations/${id}`);
+  }
+
+  /**
+   * Create a CMS Certification for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityCmsCertificationRequestModel} body
+   * @returns {Promise<Models.FacilityCmsCertificationModel>}
+   */
+  async createFacilityCmsCertificationInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/cmsCertifications`, {}, body);
+  }
+
+  /**
+   * List facility's CMS Certifications
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityCmsCertificationModel>>}
+   */
+  async listFacilityCmsCertificationInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/cmsCertifications`);
+  }
+
+  /**
+   * Get CMS Certification for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityCmsCertificationModel>}
+   */
+  async getFacilityCmsCertificationInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/cmsCertifications/${id}`);
+  }
+
+  /**
+   * Change an existing facility's CMS Certification
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityCmsCertificationPatchModel} body
+   * @returns {Promise<Models.FacilityCmsCertificationModel>}
+   */
+  async patchFacilityCmsCertificationInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/cmsCertifications/${id}`, {}, body);
+  }
+
+  /**
+   * Delete existing CMS Certification for a facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityCmsCertificationInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/cmsCertifications/${id}`);
+  }
+
+  /**
+   * Create a Medicare Enrollment for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilityMedicareEnrollmentRequestModel} body
+   * @returns {Promise<Models.FacilityMedicareEnrollmentModel>}
+   */
+  async createFacilityMedicareEnrollmentInfo(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/info/medicare-enrollments`, {}, body);
+  }
+
+  /**
+   * List facility's Medicare Enrollments
+   * @param {string} facilityId
+   * @returns {Promise<Array<Models.FacilityMedicareEnrollmentModel>>}
+   */
+  async listFacilityMedicareEnrollmentInfo(facilityId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/medicare-enrollments`);
+  }
+
+  /**
+   * Get Medicare Enrollment for an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.FacilityMedicareEnrollmentModel>}
+   */
+  async getFacilityMedicareEnrollmentInfo(facilityId, id) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/info/medicare-enrollments/${id}`);
+  }
+
+  /**
+   * Change an existing facility's Medicare Enrollment
+   * @param {string} facilityId
+   * @param {string} id
+   * @param {Models.FacilityMedicareEnrollmentPatchModel} body
+   * @returns {Promise<Models.FacilityMedicareEnrollmentModel>}
+   */
+  async patchFacilityMedicareEnrollmentInfo(facilityId, id, body) {
+    return this._simulateRequest("PATCH", `/facilities/${facilityId}/info/medicare-enrollments/${id}`, {}, body);
+  }
+
+  /**
+   * Delete a Medicare Enrollment from an existing facility
+   * @param {string} facilityId
+   * @param {string} id
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilityMedicareEnrollmentInfo(facilityId, id) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/info/medicare-enrollments/${id}`);
+  }
+
+  /**
+   * FacilitiesSpecialities Endpoints
+   */
+
+  /**
+   * Create a Speciality for an existing facility
+   * @param {string} facilityId
+   * @param {Models.FacilitySpecialityRequestModel} body
+   * @returns {Promise<Models.FacilitySpecialityModel>}
+   */
+  async createFacilitySpecialty(facilityId, body) {
+    return this._simulateRequest("POST", `/facilities/${facilityId}/specialties`, {}, body);
+  }
+
+  /**
+   * List facility's Specialties
+   * @param {string} facilityId
+   * @param {object} [query={}] Query parameters (taxonomyId, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FacilitySpecialityPageModel>}
+   */
+  async listFacilitySpecialties(facilityId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/${facilityId}/specialties?${queryString}`);
+  }
+
+  /**
+   * Get Speciality for an existing facility
+   * @param {string} facilityId
+   * @param {string} facilitySpecialtyId
+   * @returns {Promise<Models.FacilitySpecialityModel>}
+   */
+  async getFacilitySpecialty(facilityId, facilitySpecialtyId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/specialties/${facilitySpecialtyId}`);
+  }
+
+  /**
+   * Delete existing Speciality for a facility
+   * @param {string} facilityId
+   * @param {string} facilitySpecialtyId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFacilitySpecialty(facilityId, facilitySpecialtyId) {
+    return this._simulateRequest("DELETE", `/facilities/${facilityId}/specialties/${facilitySpecialtyId}`);
+  }
+
+  /**
+   * List facility's specialty information by type
+   * @param {string} facilityId
+   * @param {string} facilitySpecialtyId
+   * @param {string} facilityInfoType
+   * @returns {Promise<Array<object>>}
+   */
+  async listFacilitySpecialtyInfosByType(facilityId, facilitySpecialtyId, facilityInfoType) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/specialties/${facilitySpecialtyId}/info/${facilityInfoType}`);
+  }
+
+  /**
+   * List facility's specialty information
+   * @param {string} facilityId
+   * @param {string} facilitySpecialtyId
+   * @returns {Promise<Array<object>>}
+   */
+  async listFacilitySpecialtyInfos(facilityId, facilitySpecialtyId) {
+    return this._simulateRequest("GET", `/facilities/${facilityId}/specialties/${facilitySpecialtyId}/info`);
+  }
+
+  /**
+   * ProviderProfiles Endpoints
+   */
+
+  /**
+   * List provider profile import sources
+   * @param {object} [query={}] Query parameters (source, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderProfileImportSourcePageModel>}
+   */
+  async listProviderProfileImportSources(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/profiles/import/sources?${queryString}`);
+  }
+
+  /**
+   * Create a new provider profile import
+   * @param {Models.ProviderProfileImportRequestModel} body
+   * @returns {Promise<Models.ProviderProfileImportModel>}
+   */
+  async createProviderProfileImport(body) {
+    return this._simulateRequest("POST", "/providers/profiles/import", {}, body);
+  }
+
+  /**
+   * List provider profile imports
+   * @param {object} [query={}] Query parameters (latest, status, source, providerId, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderProfileImportPageModel>}
+   */
+  async listProviderProfileImports(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/profiles/import?${queryString}`);
+  }
+
+  /**
+   * Get an existing provider profile import
+   * @param {string} importId Identifier of the provider profile import to get the data for.
+   * @returns {Promise<Models.ProviderProfileImportModel>}
+   */
+  async getProviderProfileImport(importId) {
+    return this._simulateRequest("GET", `/providers/profiles/import/${importId}`);
+  }
+
+  /**
+   * Get profile import parameters for a provider
+   * @param {string} providerId The identifier of the provider for which the parameters should be returned.
+   * @param {string} source The source of the import to get profiles.
+   * @returns {Promise<Array<Models.IProviderParameter>>}
+   */
+  async getProviderImportParameters(providerId, source) {
+    return this._simulateRequest("GET", `/providers/profiles/imports/${source}/parameters/${providerId}`);
+  }
+
+  /**
+   * Notes Endpoints
+   */
+
+  /**
+   * Create a new provider note
+   * @param {string} providerId Identifier of the provider to create a note for.
+   * @param {Models.ProviderNotesRequestModel} body
+   * @returns {Promise<Models.ProviderNotesModel>}
+   */
+  async createNote(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/notes`, {}, body);
+  }
+
+  /**
+   * List provider notes
+   * @param {string} providerId Identifier of the provider to get all notes for.
+   * @returns {Promise<Array<Models.ProviderNotesModel>>}
+   */
+  async listNotes(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/notes`);
+  }
+
+  /**
+   * Get an existing provider note
+   * @param {string} providerId Identifier of the provider associated with the note.
+   * @param {string} noteId Identifier of the note.
+   * @returns {Promise<Models.ProviderNotesModel>}
+   */
+  async getNote(providerId, noteId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/notes/${noteId}`);
+  }
+
+  /**
+   * Change an existing provider note
+   * @param {string} providerId Identifier of the provider associated with the note to change.
+   * @param {string} noteId Identifier of the note to be changed.
+   * @param {Models.ProviderNotesRequestModel} body
+   * @returns {Promise<Models.ProviderNotesModel>}
+   */
+  async editNote(providerId, noteId, body) {
+    return this._simulateRequest("PUT", `/providers/${providerId}/notes/${noteId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing provider note
+   * @param {string} providerId Identifier of the provider associated with the note to delete.
+   * @param {string} noteId Identifier of the note to be deleted.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteNote(providerId, noteId) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/notes/${noteId}`);
+  }
+
+  /**
+   * Files Endpoints
+   */
+
+  /**
+   * Upload a file
+   * @param {string} path The complete path to the file.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async uploadFile(path) {
+    // For file uploads, you'd typically pass a FormData object.
+    // This simulation just acknowledges the call.
+    return this._simulateRequest("POST", `/files/uploads/${path}`);
+  }
+
+  /**
+   * Upload and overwrite a file
+   * @param {string} path The complete path to the file.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async uploadAndOverwriteFile(path) {
+    return this._simulateRequest("PUT", `/files/uploads/${path}`);
+  }
+
+  /**
+   * Delete a file
+   * @param {string} pathOrId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteFile(pathOrId) {
+    return this._simulateRequest("DELETE", `/files/uploads/${pathOrId}`);
+  }
+
+  /**
+   * Download a file
+   * @param {string} pathOrId
+   * @returns {Promise<string>} Blob or ArrayBuffer in a real scenario.
+   */
+  async downloadFile(pathOrId) {
+    console.log(`Simulating download of file: ${pathOrId}`);
+    return Promise.resolve("Mock file content (e.g., base64 string or blob)");
+  }
+
+  /**
+   * Get file metadata
+   * @param {string} pathOrId
+   * @returns {Promise<object>}
+   */
+  async getFileMetadata(pathOrId) {
+    console.log(`Simulating metadata retrieval for file: ${pathOrId}`);
+    return Promise.resolve({
+      id: pathOrId.includes('/') ? "mock-id" : pathOrId,
+      path: pathOrId,
+      size: 1024,
+      createdAt: new Date().toISOString(),
+      createdByUserId: "mock-user-id",
+      createdByUserEmail: "mock@example.com",
+    });
+  }
+
+  /**
+   * List uploaded files
+   * @param {object} [query={}] Query parameters (prefix, before, beforeInclusive, after, afterInclusive, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FilePageModel>}
+   */
+  async listUploadedFilesMetadata(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/files/uploads?${queryString}`);
+  }
+
+  /**
+   * List event log exports
+   * @param {object} [query={}] Query parameters (prefix, before, beforeInclusive, after, afterInclusive, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.FilePageModel>}
+   */
+  async listExportFilesMetadata(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/files/exports?${queryString}`);
+  }
+
+  /**
+   * Licenses Endpoints
+   */
+
+  /**
+   * List provider licenses
+   * @param {object} [query={}] Query parameters (providerName, providerCredentialingStatus, licenseState, licenseType, licenseStatus, licenseVerificationStatus, licenseApprovedStatus, export, providerDeactivated, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderLicensePageModel>}
+   */
+  async listProviderLicenses(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/provider-licenses?${queryString}`);
+  }
+
+  /**
+   * Trigger a new license verification
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license to be verified again.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async triggerLicenseVerification(providerId, licenseId) {
+    return this._simulateRequest("POST", `/providers/${providerId}/licenses/${licenseId}/verify`);
+  }
+
+  /**
+   * Trigger license verifications
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {Array<string>} body List with license identifiers to run verifications.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async triggerLicenseVerifications(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/licenses/verify`, {}, body);
+  }
+
+  /**
+   * Detach a license from a provider
+   * @param {string} providerId The identifier describing the provider to detach the license from.
+   * @param {string} licenseId The identifier describing the license that you want to detach.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async detachLicense(providerId, licenseId) {
+    return this._simulateRequest("DELETE", `/providers/${providerId}/licenses/${licenseId}`);
+  }
+
+  /**
+   * Get a specific license from a provider
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license that you want to get the data for.
+   * @returns {Promise<Models.LicenseModel>}
+   */
+  async getLicense(providerId, licenseId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/licenses/${licenseId}`);
+  }
+
+  /**
+   * Get a specific license verification
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license that was previously verified.
+   * @param {string} verificationId The identifier describing the license verification that you want to retrieve.
+   * @returns {Promise<Models.LicenseVerificationModel>}
+   */
+  async getLicenseVerification(providerId, licenseId, verificationId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/licenses/${licenseId}/verifications/${verificationId}`);
+  }
+
+  /**
+   * Resolve problems with a license verification
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license that has a verification problem.
+   * @param {string} verificationId The identifier describing the license verification that needs to be patched.
+   * @param {Models.LicenseVerificationResolutionModel} body
+   * @returns {Promise<Models.LicenseVerificationModel>}
+   */
+  async resolveLicenseVerificationProblems(providerId, licenseId, verificationId, body) {
+    return this._simulateRequest("PATCH", `/providers/${providerId}/licenses/${licenseId}/verifications/${verificationId}`, {}, body);
+  }
+
+  /**
+   * Diff two license verifications
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license that was previously verified.
+   * @param {string} verificationId The identifier describing the license verification that you want to diff with the previous one.
+   * @returns {Promise<Models.LicenseVerificationDiffModel>}
+   */
+  async getLicenseVerificationDiff(providerId, licenseId, verificationId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/licenses/${licenseId}/verifications/${verificationId}/diff`);
+  }
+
+  /**
+   * List all verifications for a license
+   * @param {string} providerId The identifier describing the provider that holds the license.
+   * @param {string} licenseId The identifier describing the license to get the verifications from.
+   * @returns {Promise<Array<Models.LicenseVerificationModel>>}
+   */
+  async listLicenseVerifications(providerId, licenseId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/licenses/${licenseId}/verifications`);
+  }
+
+  /**
+   * List license types
+   * @param {object} [query={}] Query parameters (state, count, sortedBy, sort, offset, cursor, sortDirection)
+   * @returns {Promise<Models.SimplifiedLicenseTypePageModel>}
+   */
+  async listSimplifiedLicenseTypes(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/licensetypes?${queryString}`);
+  }
+
+  /**
+   * List license source status
+   * @param {object} [query={}] Query parameters (licenseTypeId, state, count, sortedBy, sort, offset, cursor, sortDirection)
+   * @returns {Promise<Models.SimplifiedLicenseTypeStatusPageModel>}
+   */
+  async listSimplifiedLicenseTypesStatus(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/licensetypes/status?${queryString}`);
+  }
+
+  /**
+   * Attach a license to a provider
+   * @param {string} providerId The identifier describing the provider to attach the license to.
+   * @param {Models.AttachLicenseRequestModel} body
+   * @returns {Promise<Models.LicenseModel>}
+   */
+  async attachLicense(providerId, body) {
+    return this._simulateRequest("POST", `/providers/${providerId}/licenses`, {}, body);
+  }
+
+  /**
+   * List all licenses from a provider
+   * @param {string} providerId The identifier describing the provider to list all licenses for.
+   * @returns {Promise<Array<Models.LicenseModel>>}
+   */
+  async listLicenses(providerId) {
+    return this._simulateRequest("GET", `/providers/${providerId}/licenses`);
+  }
+
+  /**
+   * Patch an existing license
+   * @param {string} licenseId Identifier of the license to patch.
+   * @param {Models.LicensePatchModel} body
+   * @returns {Promise<Models.LicenseModel>}
+   */
+  async patchLicense(licenseId, body) {
+    return this._simulateRequest("PATCH", `/licenses/${licenseId}`, {}, body);
+  }
+
+  /**
+   * Datasets Endpoints
+   */
+
+  /**
+   * Start a dataset scan
+   * @param {Models.DatasetScanRequestModel} body
+   * @returns {Promise<Models.DatasetScanModel>}
+   */
+  async startDatasetScan(body) {
+    return this._simulateRequest("POST", "/datasets/scans", {}, body);
+  }
+
+  /**
+   * List dataset scans
+   * @param {object} [query={}] Query parameters (sortDirection, sortedBy, type, parameterSetId, referenceId, status, includeOldScans, hasMonitor, trigger, entityType, entityId, entityName, entityNpi, entityDeactivated, credentialingStatus, providerId, providerName, providerNpi, providerDeactivated, sort, offset, cursor, count)
+   * @returns {Promise<Models.DatasetScanPageModel>}
+   */
+  async listDatasetScans(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/scans?${queryString}`);
+  }
+
+  /**
+   * Get dataset scan
+   * @param {string} scanId The identifier of the scan to get results for.
+   * @returns {Promise<Models.DatasetScanModel>}
+   */
+  async getDatasetScan(scanId) {
+    return this._simulateRequest("GET", `/datasets/scans/${scanId}`);
+  }
+
+  /**
+   * List dataset matches
+   * @param {object} [query={}] Query parameters (types, userActionNeeded, referenceId, includeOldMatches, userActionResolution, matchRelevance, sort, sortDirection, sortedBy, entityType, entityId, entityName, entityNpi, entityDeactivated, credentialingStatus, providerId, providerName, providerNpi, providerDeactivated, offset, cursor, count)
+   * @returns {Promise<Models.DatasetMatchPageModel>}
+   */
+  async listDatasetMatches(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/matches?${queryString}`);
+  }
+
+  /**
+   * Get dataset metadata
+   * @param {string} datasetType The specific dataset type to get the metadata for.
+   * @returns {Promise<Models.DatasetModel>}
+   */
+  async getDataset(datasetType) {
+    return this._simulateRequest("GET", `/datasets/${datasetType}`);
+  }
+
+  /**
+   * List datasets metadata
+   * @param {object} [query={}] Query parameters (tags, entityTypes, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.DatasetPageModel>}
+   */
+  async listDatasets(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets?${queryString}`);
+  }
+
+  /**
+   * Get dataset scan parameters for a provider
+   * @param {string} datasetType The specific dataset type to get the scan parameters for.
+   * @param {string} providerId The identifier of the provider for which the parameters should be returned.
+   * @param {object} [query={}] Query parameters (parameterSetId, referenceId)
+   * @returns {Promise<Array<Models.IProviderParameter>>}
+   */
+  async getProviderDatasetScanParameters(datasetType, providerId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/${datasetType}/parameters/providers/${providerId}?${queryString}`);
+  }
+
+  /**
+   * Get dataset scan parameters for a facility
+   * @param {string} datasetType The specific dataset type to get the scan parameters for.
+   * @param {string} facilityId The identifier of the facility for which the parameters should be returned.
+   * @param {object} [query={}] Query parameters (parameterSetId, referenceId)
+   * @returns {Promise<Array<Models.IProviderParameter>>}
+   */
+  async getFacilityDatasetScanParameters(datasetType, facilityId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/${datasetType}/parameters/facilities/${facilityId}?${queryString}`);
+  }
+
+  /**
+   * Upload a dataset file
+   * @param {string} datasetType The dataset type of the file to upload.
+   * @param {FormData} formData
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async uploadDatasetFile(datasetType, formData) {
+    // In a real implementation, you'd use fetch with formData directly
+    console.log(`Simulating upload of dataset file for type: ${datasetType}`);
+    return Promise.resolve({ statusCode: 204 });
+  }
+
+  /**
+   * Patch an existing dataset match
+   * @param {string} matchId Identifier of the dataset match to patch.
+   * @param {Models.DatasetMatchPatchModel} body
+   * @returns {Promise<Models.DatasetMatchModel>}
+   */
+  async patchDatasetMatch(matchId, body) {
+    return this._simulateRequest("PATCH", `/datasets/matches/${matchId}`, {}, body);
+  }
+
+  /**
+   * Refresh dataset scan
+   * @param {string} scanId The identifier of the scan to trigger refresh for.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async refreshDatasetScan(scanId) {
+    return this._simulateRequest("POST", `/datasets/scans/${scanId}/refresh`);
+  }
+
+  /**
+   * List schools
+   * @param {object} [query={}] Query parameters (name, code, count, sortedBy, sort, offset, cursor, sortDirection)
+   * @returns {Promise<Models.SchoolCodePageModel>}
+   */
+  async listNscSchools(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/nsc/schoolCodes?${queryString}`);
+  }
+
+  /**
+   * Get dataset matches aggregations
+   * @param {object} [query={}] Query parameters (providerDeactivated)
+   * @returns {Promise<Models.DatasetMatchesAggregationsModel>}
+   */
+  async getDatasetMatchesAggregations(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/datasets/matches/aggregations?${queryString}`);
+  }
+
+  /**
+   * Monitoring Endpoints
+   */
+
+  /**
+   * Initiate monitoring for a provider
+   * @param {Models.MonitorRequestModel} body
+   * @returns {Promise<Models.MonitorModel>}
+   */
+  async createMonitor(body) {
+    return this._simulateRequest("POST", "/monitors", {}, body);
+  }
+
+  /**
+   * Lists all the monitored items
+   * @param {object} [query={}] Query parameters (type, providerIds, datasetTypes, licenseIds, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.MonitorPageModel>}
+   */
+  async listMonitors(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/monitors?${queryString}`);
+  }
+
+  /**
+   * Initiates monitoring for the specified Sanctions and Exclusions datasets for the specified providers
+   * @param {Models.BulkSanctionsAndExclusionsMonitorsRequestModel} body
+   * @returns {Promise<Models.BulkSanctionsAndExclusionsMonitorsModel>}
+   */
+  async bulkCreateSanctionsAndExclusionsMonitors(body) {
+    return this._simulateRequest("POST", "/monitors/bulk/sanctions-and-exclusions", {}, body);
+  }
+
+  /**
+   * Returns a specified monitored item
+   * @param {string} id The identifier describing the monitored item.
+   * @returns {Promise<Models.MonitorModel>}
+   */
+  async getMonitor(id) {
+    return this._simulateRequest("GET", `/monitors/${id}`);
+  }
+
+  /**
+   * Patch an existing monitored item
+   * @param {string} id The identifier describing the monitored item.
+   * @param {Models.MonitorPatchModel} body
+   * @returns {Promise<Models.MonitorModel>}
+   */
+  async patchMonitor(id, body) {
+    return this._simulateRequest("PATCH", `/monitors/${id}`, {}, body);
+  }
+
+  /**
+   * Stop monitoring an item
+   * @param {string} id The identifier describing the monitored item.
+   * @param {object} [query={}] Query parameters (propagateToPrimarySource)
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteMonitor(id, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("DELETE", `/monitors/${id}?${queryString}`);
+  }
+
+  /**
+   * Alerts Endpoints
+   */
+
+  /**
+   * Get an existing alert
+   * @param {string} alertId Identifier of the alert to get the data for.
+   * @returns {Promise<Models.AlertModel>}
+   */
+  async getAlert(alertId) {
+    return this._simulateRequest("GET", `/alerts/${alertId}`);
+  }
+
+  /**
+   * Dismiss an alert
+   * @param {string} alertId Identifier of the alert to dismiss.
+   * @param {Models.DismissRequestModel} body
+   * @returns {Promise<Models.AlertModel>}
+   */
+  async dismissAlert(alertId, body) {
+    return this._simulateRequest("POST", `/alerts/${alertId}/dismiss`, {}, body);
+  }
+
+  /**
+   * Get alert aggregations
+   * @param {object} [query={}] Query parameters (providerDeactivated)
+   * @returns {Promise<Models.AlertAggregationsModel>}
+   */
+  async getAlertAggregations(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/alerts/aggregations?${queryString}`);
+  }
+
+  /**
+   * List alerts
+   * @param {object} [query={}] Query parameters (providerId, providerName, providerNpi, type, status, sortDirection, providerDeactivated, sortedBy, sort, offset, cursor, count)
+   * @returns {Promise<Models.AlertPageModel>}
+   */
+  async listAlerts(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/alerts?${queryString}`);
+  }
+
+  /**
+   * Groups Endpoints
+   */
+
+  /**
+   * Create a new group
+   * @param {Models.GroupRequestModel} body
+   * @returns {Promise<Models.GroupModel>}
+   */
+  async createGroup(body) {
+    return this._simulateRequest("POST", "/groups", {}, body);
+  }
+
+  /**
+   * List groups
+   * @param {object} [query={}] Query parameters (providerId)
+   * @returns {Promise<Array<Models.GroupModel>>}
+   */
+  async listGroups(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/groups?${queryString}`);
+  }
+
+  /**
+   * Get an existing group
+   * @param {string} groupId Identifier of the group to get the data for.
+   * @returns {Promise<Models.GroupModel>}
+   */
+  async getGroup(groupId) {
+    return this._simulateRequest("GET", `/groups/${groupId}`);
+  }
+
+  /**
+   * Patch an existing group
+   * @param {string} groupId
+   * @param {Models.GroupPatchModel} body
+   * @returns {Promise<Models.GroupModel>}
+   */
+  async patchGroup(groupId, body) {
+    return this._simulateRequest("PATCH", `/groups/${groupId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing group
+   * @param {string} groupId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteGroup(groupId) {
+    return this._simulateRequest("DELETE", `/groups/${groupId}`);
+  }
+
+  /**
+   * List enrollments for the group
+   * @param {string} groupId The unique identifier of the group to get enrollments for.
+   * @param {object} [query={}] Query parameters (payerPlanId, networkStatus, enrollmentStatus, specialistType, submissionDate, effectiveDate, sortedBy, sort, offset, cursor, count, sortDirection, rosterType)
+   * @returns {Promise<Models.ProviderEnrollmentPageModel>}
+   */
+  async listGroupEnrollments(groupId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/groups/${groupId}/enrollments?${queryString}`);
+  }
+
+  /**
+   * List providers for the group
+   * @param {string} groupId The unique identifier of the group to get providers for.
+   * @param {object} [query={}] Query parameters (status, providerName, credentialingStatus, providerTypeId, npi, deactivated, nextCredentialingDateOnOrAfter, nextCredentialingDateOnOrBefore, sortedBy, sort, offset, cursor, count, sortDirection, rosterType)
+   * @returns {Promise<Models.ProviderPageModel>}
+   */
+  async listGroupProviders(groupId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/groups/${groupId}/providers?${queryString}`);
+  }
+
+  /**
+   * Patch providers-group relations
+   * @param {string} groupId Identifier of the group.
+   * @param {Models.GroupProviderRelationPatchModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async patchGroupProviderRelation(groupId, body) {
+    return this._simulateRequest("PATCH", `/groups/${groupId}/providers`, {}, body);
+  }
+
+  /**
+   * Patch payer plans-group relations
+   * @param {string} groupId Identifier of the group.
+   * @param {Models.GroupPayerRelationPatchModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async patchGroupPayerRelation(groupId, body) {
+    return this._simulateRequest("PATCH", `/groups/${groupId}/payer-plans`, {}, body);
+  }
+
+  /**
+   * Payers Endpoints
+   */
+
+  /**
+   * Create a new payer
+   * @param {Models.PayerRequestModel} body
+   * @returns {Promise<Models.PayerModel>}
+   */
+  async createPayer(body) {
+    return this._simulateRequest("POST", "/payers", {}, body);
+  }
+
+  /**
+   * List payers
+   * @returns {Promise<Array<Models.PayerModel>>}
+   */
+  async listPayers() {
+    return this._simulateRequest("GET", "/payers");
+  }
+
+  /**
+   * Get an existing payer
+   * @param {string} payerId Identifier of the payer to get the data for.
+   * @returns {Promise<Models.PayerModel>}
+   */
+  async getPayer(payerId) {
+    return this._simulateRequest("GET", `/payers/${payerId}`);
+  }
+
+  /**
+   * Patch an existing payer
+   * @param {string} payerId
+   * @param {Models.PayerPatchModel} body
+   * @returns {Promise<Models.PayerModel>}
+   */
+  async patchPayer(payerId, body) {
+    return this._simulateRequest("PATCH", `/payers/${payerId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing payer
+   * @param {string} payerId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deletePayer(payerId) {
+    return this._simulateRequest("DELETE", `/payers/${payerId}`);
+  }
+
+  /**
+   * PayerPlans Endpoints
+   */
+
+  /**
+   * Create a new payer plan
+   * @param {Models.PayerPlanRequestModel} body
+   * @returns {Promise<Models.PayerPlanModel>}
+   */
+  async createPayerPlan(body) {
+    return this._simulateRequest("POST", "/payer-plans", {}, body);
+  }
+
+  /**
+   * List payer plans
+   * @param {object} [query={}] Query parameters (groupId, payerId)
+   * @returns {Promise<Array<Models.PayerPlanModel>>}
+   */
+  async listPayerPlans(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/payer-plans?${queryString}`);
+  }
+
+  /**
+   * Get an existing payer plan
+   * @param {string} payerPlanId Identifier of the payer plan to get the data for.
+   * @returns {Promise<Models.PayerPlanModel>}
+   */
+  async getPayerPlan(payerPlanId) {
+    return this._simulateRequest("GET", `/payer-plans/${payerPlanId}`);
+  }
+
+  /**
+   * Patch an existing payer plan
+   * @param {string} payerPlanId
+   * @param {Models.PayerPlanPatchModel} body
+   * @returns {Promise<Models.PayerPlanModel>}
+   */
+  async patchPayerPlan(payerPlanId, body) {
+    return this._simulateRequest("PATCH", `/payer-plans/${payerPlanId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing payer plan
+   * @param {string} payerPlanId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deletePayerPlan(payerPlanId) {
+    return this._simulateRequest("DELETE", `/payer-plans/${payerPlanId}`);
+  }
+
+  /**
+   * ProviderEnrollments Endpoints
+   */
+
+  /**
+   * Create a new provider enrollment
+   * @param {Models.ProviderEnrollmentRequestModel} body
+   * @returns {Promise<Models.ProviderEnrollmentModel>}
+   */
+  async createProviderEnrollment(body) {
+    return this._simulateRequest("POST", "/providers/enrollments", {}, body);
+  }
+
+  /**
+   * List provider enrollments
+   * @param {object} [query={}] Query parameters (groupId, providerId, payerPlanId, networkStatus, enrollmentStatus, specialistType, submissionDate, effectiveDate, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.ProviderEnrollmentPageModel>}
+   */
+  async listProviderEnrollments(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/enrollments?${queryString}`);
+  }
+
+  /**
+   * Get an existing provider enrollment
+   * @param {string} providerEnrollmentId Identifier of the provider enrollment to get the data for.
+   * @returns {Promise<Models.ProviderEnrollmentModel>}
+   */
+  async getProviderEnrollment(providerEnrollmentId) {
+    return this._simulateRequest("GET", `/providers/enrollments/${providerEnrollmentId}`);
+  }
+
+  /**
+   * Patch an existing provider enrollment
+   * @param {string} providerEnrollmentId
+   * @param {Models.ProviderEnrollmentPatchModel} body
+   * @returns {Promise<Models.ProviderEnrollmentModel>}
+   */
+  async patchProviderEnrollment(providerEnrollmentId, body) {
+    return this._simulateRequest("PATCH", `/providers/enrollments/${providerEnrollmentId}`, {}, body);
+  }
+
+  /**
+   * Delete an existing provider enrollment
+   * @param {string} providerEnrollmentId
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteProviderEnrollment(providerEnrollmentId) {
+    return this._simulateRequest("DELETE", `/providers/enrollments/${providerEnrollmentId}`);
+  }
+
+  /**
+   * Integrations Endpoints
+   */
+
+  /**
+   * Fountain integration webhook
+   * @param {string} organizationId The organization on which this webhook is called.
+   * @param {Models.FountainWebhookRequestModel} body
+   * @returns {Promise<Models.FountainWebhookResponseModel>}
+   */
+  async fountainWebhook(organizationId, body) {
+    return this._simulateRequest("POST", `/integrations/fountain/webhook/${organizationId}`, {}, body);
+  }
+
+  /**
+   * Salesforce document request
+   * @param {Models.SalesforceDocumentRequestRequestModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async salesforceDocumentRequest(body) {
+    return this._simulateRequest("POST", "/integrations/salesforce/documentrequest", {}, body);
+  }
+
+  /**
+   * Webhooks Endpoints
+   */
+
+  /**
+   * Create a new webhook
+   * @param {Models.WebhookRequestModel} body
+   * @returns {Promise<Models.WebhookModel>}
+   */
+  async createWebhook(body) {
+    return this._simulateRequest("POST", "/webhooks", {}, body);
+  }
+
+  /**
+   * List all webhooks
+   * @returns {Promise<Array<Models.WebhookModel>>}
+   */
+  async listWebhooks() {
+    return this._simulateRequest("GET", "/webhooks");
+  }
+
+  /**
+   * Get details from a webhook
+   * @param {string} webhookId Identifier of a previously created webhook.
+   * @returns {Promise<Models.WebhookModel>}
+   */
+  async getWebhook(webhookId) {
+    return this._simulateRequest("GET", `/webhooks/${webhookId}`);
+  }
+
+  /**
+   * Update a webhook
+   * @param {string} webhookId Identifier of a previously created webhook.
+   * @param {Models.WebhookPatchModel} body
+   * @returns {Promise<Models.WebhookModel>}
+   */
+  async patchWebhook(webhookId, body) {
+    return this._simulateRequest("PATCH", `/webhooks/${webhookId}`, {}, body);
+  }
+
+  /**
+   * Delete a webhook
+   * @param {string} webhookId Identifier of a previously created webhook to be deleted.
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async deleteWebhook(webhookId) {
+    return this._simulateRequest("DELETE", `/webhooks/${webhookId}`);
+  }
+
+  /**
+   * List all webhooks logs
+   * @param {object} [query={}] Query parameters (type, status, sortDirection, traceId, before, beforeInclusive, after, afterInclusive, sortedBy, sort, offset, cursor, count)
+   * @returns {Promise<Models.WebhooksLogPageModel>}
+   */
+  async listWebhooksLog(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/webhookslog?${queryString}`);
+  }
+
+  /**
+   * Audit Endpoints
+   */
+
+  /**
+   * List event log entries
+   * @param {object} [query={}] Query parameters (sortDirection, type, includeFailedRequests, entityId, category, subcategory, before, beforeInclusive, after, afterInclusive, correlationId, sortedBy, sort, offset, cursor, count)
+   * @returns {Promise<Models.EventLogPageModel>}
+   */
+  async listEventLogEntries(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/log/events?${queryString}`);
+  }
+
+  /**
+   * Users Endpoints
+   */
+
+  /**
+   * Change the password of the current user
+   * @param {Models.PasswordUpdateModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async setCurrentUserPassword(body) {
+    return this._simulateRequest("POST", "/users/me/password", {}, body);
+  }
+
+  /**
+   * Reports Endpoints
+   */
+
+  /**
+   * List sanctions and exclusions reports for the organization.
+   * @returns {Promise<Array<Models.SanctionsAndExclusionsReportInfoModel>>}
+   */
+  async listSanctionsAndExclusionsReports() {
+    return this._simulateRequest("GET", "/organization/reports/sanctionsandexclusions");
+  }
+
+  /**
+   * List enrollments reports for the organization.
+   * @returns {Promise<Array<Models.EnrollmentsReportInfoModel>>}
+   */
+  async listEnrollmentsReports() {
+    return this._simulateRequest("GET", "/organization/reports/enrollments");
+  }
+
+  /**
+   * List expirable credentials reports for the organization.
+   * @returns {Promise<Array<Models.ExpirableCredentialsReportInfoModel>>}
+   */
+  async listExpirableCredentialsReports() {
+    return this._simulateRequest("GET", "/organization/reports/expirable-credentials");
+  }
+
+  /**
+   * List roster reports for the organization.
+   * @returns {Promise<Array<Models.RosterReportInfoModel>>}
+   */
+  async listRosterReports() {
+    return this._simulateRequest("GET", "/organization/reports/roster");
+  }
+
+  /**
+   * CredentialingRequests Endpoints
+   */
+
+  /**
+   * Aggregate provider credentialing request owners
+   * @param {object} [query={}] Query parameters (providerDeactivated)
+   * @returns {Promise<Array<Models.BaseUserModel>>}
+   */
+  async aggregateCredentialingRequestOwners(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/credentialing-requests/aggregations/owners?${queryString}`);
+  }
+
+  /**
+   * Create a new credentialing request
+   * @param {Models.CredentialingRequestProviderRequestModel | Models.CredentialingRequestFacilityRequestModel} body
+   * @returns {Promise<Models.CredentialingRequestModel>}
+   */
+  async createCredentialingRequest(body) {
+    return this._simulateRequest("POST", "/credentialing-requests", {}, body);
+  }
+
+  /**
+   * List credentialing requests
+   * @param {object} [query={}] Query parameters (entityType, currentEventStatus, providerCredentialingStatus, priority, ownerId, includeUnassigned, credentialingRequestType, entityId, entityName, entityNpi, entityDeactivated, facilitySpecialtyId, providerId, providerName, providerNpi, providerDeactivated, sortedBy, sort, offset, cursor, count, sortDirection)
+   * @returns {Promise<Models.CredentialingRequestPageModel>}
+   */
+  async listCredentialingRequests(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/credentialing-requests?${queryString}`);
+  }
+
+  /**
+   * Create a new credentialing request event
+   * @param {string} requestId
+   * @param {Models.CredentialingRequestEventRequestModel} body
+   * @returns {Promise<Models.CredentialingRequestEventModel>}
+   */
+  async createCredentialingRequestEvent(requestId, body) {
+    return this._simulateRequest("POST", `/credentialing-requests/${requestId}/events`, {}, body);
+  }
+
+  /**
+   * Get a specific credentialing request
+   * @param {string} requestId Identifier of the credentialing request to get the data for.
+   * @returns {Promise<Models.CredentialingRequestModel>}
+   */
+  async getCredentialingRequest(requestId) {
+    return this._simulateRequest("GET", `/credentialing-requests/${requestId}`);
+  }
+
+  /**
+   * Patch an existing credentialing request
+   * @param {string} requestId
+   * @param {Models.CredentialingRequestPatchModel} body
+   * @returns {Promise<Models.CredentialingRequestModel>}
+   */
+  async patchCredentialingRequest(requestId, body) {
+    return this._simulateRequest("PATCH", `/credentialing-requests/${requestId}`, {}, body);
+  }
+
+  /**
+   * Get credentialing requests aggregations
+   * @param {object} [query={}] Query parameters (entityDeactivated, entityType)
+   * @returns {Promise<Models.CredentialingRequestAggregationModel>}
+   */
+  async getCredentialingRequestAggregations(query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/credentialing-requests/aggregations?${queryString}`);
+  }
+
+  /**
+   * Get credentialing request event
+   * @param {string} requestId
+   * @param {string} eventId
+   * @returns {Promise<Models.CredentialingRequestEventModel>}
+   */
+  async getCredentialingRequestEvent(requestId, eventId) {
+    return this._simulateRequest("GET", `/credentialing-requests/${requestId}/events/${eventId}`);
+  }
+
+  /**
+   * Get the credentialing data for a facility
+   * @param {string} facilityId Identifier of the facility to get the data for.
+   * @param {object} [query={}] Query parameters (credentialingRequestId)
+   * @returns {Promise<Models.FacilityCredentialingDataModel>}
+   */
+  async getFacilityCredentialingData(facilityId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/facilities/${facilityId}/credentialing-data?${queryString}`);
+  }
+
+  /**
+   * Get the credentialing data for a provider
+   * @param {string} providerId Identifier of the provider to get the data for.
+   * @param {object} [query={}] Query parameters (credentialingRequestId)
+   * @returns {Promise<Models.ProviderCredentialingDataModel>}
+   */
+  async getProviderCredentialingData(providerId, query = {}) {
+    const queryString = new URLSearchParams(query).toString();
+    return this._simulateRequest("GET", `/providers/${providerId}/credentialing-data?${queryString}`);
+  }
+
+  /**
+   * Create or replace a credentialing request checklist
+   * @param {string} requestId
+   * @param {Models.CredentialingRequestChecklistRequestModel} body
+   * @returns {Promise<Models.NoContentResult>}
+   */
+  async createCredentialingRequestChecklist(requestId, body) {
+    return this._simulateRequest("PUT", `/credentialing-requests/${requestId}/checklist`, {}, body);
+  }
+}
+
+// Export the client and models for use
+// In a browser environment, you might attach these to `window` or use a module bundler.
+window.VerifiableApiClient = VerifiableApiClient;
+window.VerifiableApiModels = Models;
+
+/**
+ * Example Usage (uncomment to run in a browser console after the script loads)
+ */
+/*
+(async () => {
+  const client = new VerifiableApiClient();
+
+  try {
+    // Example 1: Authenticate (simulated)
+    const authResponse = await client.passwordAuth({
+      email: "test@example.com",
+      password: "password123",
+    });
+    console.log("Auth Response:", authResponse);
+
+    // Example 2: Create a new provider (simulated)
+    const newProvider = await client.createProvider({
+      firstName: "Jane",
+      lastName: "Doe",
+      dateOfBirth: "1990-05-15T00:00:00Z",
+    });
+    console.log("New Provider:", newProvider);
+
+    // Example 3: List providers (simulated)
+    const providersPage = await client.listProviders({ count: 5 });
+    console.log("Providers List:", providersPage.items);
+
+    // Example 4: Attach a license to the new provider (simulated)
+    const attachedLicense = await client.attachLicense(newProvider.id, {
+      licenseNumber: "LIC12345",
+      licenseTypeId: "0059f76a-280a-377a-73e2-ddfe86f4113c", // Example UUID, replace with a real one from listSimplifiedLicenseTypes
+      state: "CA",
+      isPrimary: true,
+    });
+    console.log("Attached License:", attachedLicense);
+
+    // Example 5: Get license types (simulated)
+    const licenseTypes = await client.listSimplifiedLicenseTypes();
+    console.log("License Types:", licenseTypes.items);
+
+  } catch (error) {
+    console.error("API call failed:", error.message);
+  }
+})();
+*/
+
+
+
+
+
+
+
+ Functional Dashboard:
+The app provides a functional dashboard that is tailored to each credentialer to help efficiently manage their tasks as follows:
+Workflow Status Information (Past 30, 60, 90 days)
+Exclude: Info Requested, Returned, Cancelled, Panel Closed, Need to Submit, In Progress
+Overdue follow-up & Delinquent workflow (Past 30, 60, 90 days)
+Workload (Excl. statuses: Approved, Cancelled, Panel closed)
+Attachments (Expired, Expire within 30 days )
+Today’s Follow Ups
+Provider Specialties
+ Providers
+Add, Edit, Remove
+Personal Data
+Professional Info
+Specialty
+Facilities / Locations
+Hospital Privileges/li>
+Insurance Info
+Attachments
+Credit Tracker
+Sanctions
+Covering Provider
+Internal Date
+Convenient search, filling, and intuitive interface
+ Groups
+Add, Edit, Remove
+General Info
+Professional Info
+Facilities / Locations
+Providers
+Insurance Info
+Attachments
+Ownership
+Convenient search, filling, and intuitive interface
+ Follow-ups:
+Keep track of insurance follow-ups, reassign work as necessary, and never miss an important callback by receiving regular reminders.
+ Workflows:
+Allocate tasks among your staff based on specific needs and complexities with the Apps facilitated workflows.
+ Insurances:
+Library of insurance contacts: Access phone and email contact information for a library of insurance contacts to help you efficiently manage your work.
+ Due date reminders:
+Receive timely reminders for tasks that are approaching their due date to help you stay on top of your work.
+ Notes:
+Keep track of all insurance communications, including time and dates, to make organization easier.
+ Monitoring:
+The App allows you to collect, verify, store, and share all provider lifecycle data in one central location, resulting in time savings and cost containment.
+ Support:
+Our App team of experts is available to answer any questions, manage requests, or help with issues via email to ensure you have the support you need.
+ Users:
+Ability to invite users based on Roles and permissions
+ Recredentialing:
+Keep track of your client's insurance renewal contract dates and manage expirable documents in one central location with the Apps recredentialing feature.
+ NPI registry-API:
+The Apps NPI registry-API allows your system to access NPPES public data in real-time and retrieve data to save in your system.
+ data.cms.gov-API:
+The data.cms.gov-API helps you look up the revalidation due date for Medicare providers who must revalidate their enrollment record information every three or five years.
+ Sophisticated Interface:
+The Apps features make it easier to manage credentialing processes of any size group and employees assigned to clients' workflows with a sophisticated interface.
+ All-in-one client portal:
+The portal is designed to help you maintain profiles, manage insurance statuses, electronically sign documents, and more.
+ Enhanced internal credentialing:
+The App makes it easy to streamline your enrollment processes, regardless of your level of expertise.
+ Reporting:
+Generate any type of reports you need to help you make informed decisions and manage your work.
+Technical prospective:
+ Scalability:
+Client-server based applications can handle larger amounts of data than Excel, which is limited by the amount of memory on your computer.
+ Multi-user access:
+Client-server based applications can be accessed by multiple users at once, allowing for collaboration and real-time updates. Excel files, on the other hand, can only be edited
+by one user at a time.
+ Security:
+Client-server based applications can provide better security features, such as user authentication and access control, to protect sensitive data from unauthorized access. Excel
+files, on the other hand, can be easily shared or accessed by anyone with access to the file.
+ Centralized data storage:
+With a client-server based application, all data is stored in a centralized location, making it easier to manage and maintain. Excel files, on the other hand, are typically stored on 
+individual computers, making it harder to manage and maintain a consistent data set.
+ Automation:
+Client-server based applications can automate repetitive tasks, such as data entry and report generation, reducing the risk of errors and saving time. Excel files can be 
+automated to some extent, but not to the same degree as a client-server based application.
+ Integration:
+Client-server based applications can be easily integrated with other software, such as accounting or CRM software, making it easier to manage business operations. Excel files 
+can be integrated to some extent, but may require more manual effort.
+ Templates/Predefined forms:
+Request for Existing Provider ID,
+ETIN-Certification Statement for Provider Billing Medicaid and W9 form to help you streamline your processes.
+
+

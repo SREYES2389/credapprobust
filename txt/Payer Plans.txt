@@ -1,0 +1,92 @@
+// --- Payer Plans ---
+/**
+ * Creates a new payer plan record.
+ * @param {object} planData - The data for the new plan (payerId, name, state).
+ * @returns {object} A success or error object.
+ */
+function createPayerPlan(planData) {
+  try {
+    if (!planData || !planData.payerId || !planData.name) {
+      return { success: false, message: "Payer ID and Plan Name are required." };
+    }
+    const sheet = getSheet(PAYER_PLANS_SHEET_NAME, PAYER_PLANS_HEADERS);
+    const newId = Utilities.getUuid();
+    // Headers: ["ID", "Payer ID", "Name", "State"]
+    const rowData = [newId, planData.payerId, planData.name, planData.state || ""];
+    sheet.appendRow(rowData);
+    invalidateRowIndexCache(sheet);
+    logAuditEvent("Request", `Payer Plan created: ${planData.name} for Payer ${planData.payerId}`, { planId: newId, payerId: planData.payerId });
+    return { success: true, message: `Payer Plan "${planData.name}" created with ID: ${newId}` };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to create payer plan: ${error.message}`);
+    return { success: false, message: `Failed to create payer plan: ${error.message}` };
+  }
+}
+
+/**
+ * Lists payer plans, optionally filtered by payer ID.
+ * @param {string} [payerId] - Optional. The ID of the payer to filter plans by.
+ * @returns {object} An object containing success status and payer plans data.
+ */
+function listPayerPlans(payerId = null) {
+  try {
+    const sheet = getSheet(PAYER_PLANS_SHEET_NAME, PAYER_PLANS_HEADERS);
+    let allPlans = sheetDataToObjects(sheet.getDataRange().getValues());
+    if (payerId) {
+      allPlans = allPlans.filter(p => p.payerId === payerId);
+    }
+    return { success: true, data: allPlans };
+  } catch (error) {
+    logAuditEvent("Error", `Failed to list payer plans: ${error.message}`);
+    return { success: false, message: `Failed to list payer plans: ${error.message}` };
+  }
+}
+
+/**
+ * Updates an existing payer plan.
+ * @param {object} planData - The data to update for the plan (id, name, state, payerId).
+ * @returns {object} A success or error message.
+ */
+function updatePayerPlan(planData) {
+  if (!planData || !planData.id) {
+    return { success: false, message: "Payer Plan ID is required to update." };
+  }
+  // Using generic patchDetailedInfo for updating
+  const result = patchDetailedInfo(PAYER_PLANS_SHEET_NAME, planData.id, planData);
+  if (result.success) {
+    logAuditEvent("Request", `Payer Plan updated: ${planData.id}`, { planId: planData.id, newData: planData });
+  } else {
+    logAuditEvent("Error", `Failed to update payer plan ${planData.id}: ${result.message}`);
+  }
+  return result;
+}
+
+/**
+ * Deletes a payer plan record and its associated enrollments.
+ * @param {string} planId - The ID of the payer plan to delete.
+ * @returns {object} A success or error message.
+ */
+function deletePayerPlan(planId) {
+  try {
+    const result = deleteDetailedProviderInfo(PAYER_PLANS_SHEET_NAME, PAYER_PLANS_HEADERS, planId);
+    if (result.success) {
+      // Delete associated ProviderEnrollments
+      const enrollmentsSheet = getSheet(PROVIDER_ENROLLMENTS_SHEET_NAME, PROVIDER_ENROLLMENTS_HEADERS);
+      const enrollmentPlanIdColIndex = PROVIDER_ENROLLMENTS_HEADERS.indexOf("Payer Plan ID");
+      deleteRowsByColumnValue(enrollmentsSheet, enrollmentPlanIdColIndex, planId);
+
+      logAuditEvent("Request", `Payer Plan deleted: ${planId}`, { planId: planId });
+    }
+    return result;
+  } catch (error) {
+    logAuditEvent("Error", `Failed to delete payer plan ${planId}: ${error.message}`);
+    return { success: false, message: `Failed to delete payer plan: ${error.message}` };
+  }
+}
+
+/**
+ * Retrieves a specific payer plan by its ID.
+ * @param {string} payerPlanId The ID of the payer plan to retrieve.
+ * @returns {object} An object containing success status and the plan data.
+ */
+function getPayerPlan(payerPlanId) { /* Existing implementation from Code.txt */ }
