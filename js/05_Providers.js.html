@@ -1,19 +1,20 @@
 <script>
 /**
  * @fileoverview
- * This file contains all client-side JavaScript functions for managing Providers.
+ * This file contains all client-side JavaScript functions for managing Providers,
+ * including loading, adding, updating, deleting, and rendering their details
+ * using a schema-driven approach for sub-entities.
  */
 
-let providerDataTable = null;
-let allProviders = []; // Cache for all providers
-let currentProviderPage = 1;
-const providersPerPage = 15;
-let selectedProviderIds = new Set();
+// --- State Management (Assumed to be in 00_State.js.html) ---
+// state.providers, config.pageSize, etc. are assumed to be globally accessible.
+
+// --- Core Provider CRUD Operations ---
 
 /**
- * Clears the provider form.
+ * Clears the main provider form.
  */
-function clearProviderForm() {
+function clearForm() {
     document.getElementById('providerId').value = '';
     document.getElementById('firstName').value = '';
     document.getElementById('lastName').value = '';
@@ -24,24 +25,22 @@ function clearProviderForm() {
 }
 
 /**
- * Populates the provider form with data from a selected row.
- * @param {string} providerId The ID of the provider to load.
+ * Populates the main provider form with data from a selected row for editing.
+ * @param {object} provider - The provider object to load into the form.
  */
-function loadProviderToForm(providerId) {
-    const provider = allProviders.find(p => p.id === providerId);
-    if (provider) {
-        document.getElementById('providerId').value = provider.id;
-        document.getElementById('firstName').value = provider.firstName;
-        document.getElementById('lastName').value = provider.lastName;
-        document.getElementById('npi').value = provider.npi;
-        document.getElementById('nextCredentialingDate').value = provider.nextCredentialingDate;
-        document.getElementById('credentialingStatus').value = provider.credentialingStatus;
-        document.getElementById('deactivated').checked = provider.deactivated;
-    }
+function editProvider(provider) {
+    document.getElementById('providerId').value = provider.id;
+    document.getElementById('firstName').value = provider.firstName;
+    document.getElementById('lastName').value = provider.lastName;
+    document.getElementById('npi').value = provider.npi || '';
+    document.getElementById('nextCredentialingDate').value = provider.nextCredentialingDate || '';
+    document.getElementById('credentialingStatus').value = provider.credentialingStatus;
+    document.getElementById('deactivated').checked = provider.deactivated;
+    window.scrollTo(0, 0); // Scroll to top to see the form
 }
 
 /**
- * Adds a new provider.
+ * Adds a new provider record.
  */
 function addProvider() {
     const firstName = document.getElementById('firstName').value;
@@ -51,39 +50,32 @@ function addProvider() {
     const credentialingStatus = document.getElementById('credentialingStatus').value;
     const deactivated = document.getElementById('deactivated').checked;
 
-    if (!firstName || !lastName) {
-        showMessage('Error: First name and last name are required.', 'error');
+    const providerData = {
+        firstName: firstName,
+        lastName: lastName,
+        npi: npi || null, // Send null if empty
+        nextCredentialingDate: nextCredentialingDate || null, // Send null if empty
+        credentialingStatus: credentialingStatus,
+        deactivated: deactivated
+    };
+    if (!providerData.firstName || !providerData.lastName) {
+        showMessage('First Name and Last Name are required.', true);
         return;
     }
-
-    google.script.run
-        .withSuccessHandler(function(response) {
-            if (response.success) {
-                showMessage(response.message, 'success');
-                clearProviderForm();
-                loadProviders(currentProviderPage); // Reload the current page
-            } else {
-                showMessage('Error adding provider: ' + response.message, 'error');
-            }
-        })
-        .withFailureHandler(function(error) {
-            showMessage('Server error adding provider: ' + error.message, 'error');
-        })
-        .createProvider({
-            firstName: firstName,
-            lastName: lastName,
-            npi: npi,
-            nextCredentialingDate: nextCredentialingDate,
-            credentialingStatus: credentialingStatus,
-            deactivated: deactivated
-        });
+    api.run('createProvider', providerData)
+        .then(handleSaveResponse(() => loadProviders(1), clearForm))
+        .catch(err => showMessage(err.message, true));
 }
 
 /**
- * Updates an existing provider.
+ * Updates an existing provider record.
  */
 function updateProvider() {
-    const providerId = document.getElementById('providerId').value;
+    const id = document.getElementById('providerId').value;
+    if (!id) {
+        showMessage('Provider ID is required to update. Select a provider from the list first.', true);
+        return;
+    }
     const firstName = document.getElementById('firstName').value;
     const lastName = document.getElementById('lastName').value;
     const npi = document.getElementById('npi').value;
@@ -91,490 +83,560 @@ function updateProvider() {
     const credentialingStatus = document.getElementById('credentialingStatus').value;
     const deactivated = document.getElementById('deactivated').checked;
 
-    if (!providerId) {
-        showMessage('Error: Select a provider to update.', 'error');
-        return;
-    }
-    if (!firstName || !lastName) {
-        showMessage('Error: First name and last name are required.', 'error');
-        return;
-    }
-
-    google.script.run
-        .withSuccessHandler(function(response) {
-            if (response.success) {
-                showMessage(response.message, 'success');
-                clearProviderForm();
-                loadProviders(currentProviderPage); // Reload the current page
-            } else {
-                showMessage('Error updating provider: ' + response.message, 'error');
-            }
-        })
-        .withFailureHandler(function(error) {
-            showMessage('Server error updating provider: ' + error.message, 'error');
-        })
-        .updateProvider({
-            id: providerId,
-            firstName: firstName,
-            lastName: lastName,
-            npi: npi,
-            nextCredentialingDate: nextCredentialingDate,
-            credentialingStatus: credentialingStatus,
-            deactivated: deactivated
-        });
+    const providerData = {
+        id: id,
+        firstName: firstName,
+        lastName: lastName,
+        npi: npi || null,
+        nextCredentialingDate: nextCredentialingDate || null,
+        credentialingStatus: credentialingStatus,
+        deactivated: deactivated
+    };
+    api.run('updateProvider', providerData)
+        .then(handleSaveResponse(() => loadProviders(state.providers.currentPage), clearForm))
+        .catch(err => showMessage(err.message, true));
 }
 
 /**
- * Deletes a provider.
+ * Deletes a provider record after confirmation.
  */
 function deleteProvider() {
-    const providerId = document.getElementById('providerId').value;
-    if (!providerId) {
-        showMessage('Error: Select a provider to delete.', 'error');
+    const id = document.getElementById('providerId').value;
+    if (!id) {
+        showMessage('Select a provider to delete.', true);
         return;
     }
-
-    showConfirmModal('Confirm Delete', 'Are you sure you want to delete this provider and all associated data?', function() {
-         google.script.run
-            .withSuccessHandler(function(response) {
-                if (response.success) {
-                    showMessage(response.message, 'success');
-                    clearProviderForm();
-                    loadProviders(currentProviderPage); // Reload the current page
-                } else {
-                    showMessage('Error deleting provider: ' + response.message, 'error');
-                }
-            })
-            .withFailureHandler(function(error) {
-                showMessage('Server error deleting provider: ' + error.message, 'error');
-            })
-            .deleteProvider(providerId);
-    });
+    showConfirmModal(
+        'Delete Provider',
+        `Are you sure you want to delete provider ${id} and all associated data? This action cannot be undone.`,
+        () => {
+            api.run('deleteProvider', id)
+                .then(handleSaveResponse(() => loadProviders(1), clearForm))
+                .catch(err => showMessage(err.message, true));
+        }
+    );
 }
 
-
 /**
- * Loads providers into the table with pagination and search.
- * @param {number} page The page number to load.
+ * Loads providers into the main table with pagination and search/sort options.
+ * @param {number} [page=1] - The page number to load.
  */
 function loadProviders(page = 1) {
-    currentProviderPage = page;
-    const searchTerm = document.getElementById('providerSearch').value;
+    state.providers.currentPage = page;
+    const providerSearch = document.getElementById('providerSearch');
+    state.providers.searchTerm = providerSearch ? providerSearch.value : '';
+
+    const providerTableBody = document.getElementById('providerTableBody');
+    if (providerTableBody) {
+        providerTableBody.innerHTML = '<tr><td colspan="9" class="text-center">Loading providers...</td></tr>';
+    }
+
     const options = {
-        page: page,
-        pageSize: providersPerPage,
-        searchTerm: searchTerm,
-        sortBy: 'lastName', // Default sort
-        sortOrder: 'asc' // Default order
+        page: state.providers.currentPage,
+        pageSize: config.pageSize,
+        searchTerm: state.providers.searchTerm,
+        sortBy: state.providers.sortBy,
+        sortOrder: state.providers.sortOrder
     };
 
-    showLoading(true);
-    google.script.run
-        .withSuccessHandler(function(response) {
-            showLoading(false);
-            if (response.success) {
-                allProviders = response.data; // Cache the current page's data
-                renderProviderTable(allProviders);
-                renderPagination('providerPagination', currentProviderPage, providersPerPage, response.totalRecords, loadProviders);
-                // Reset selection and bulk controls after loading new page
-                selectedProviderIds.clear();
-                updateProviderSelectionCount();
-                document.getElementById('bulkUpdateStatus').value = ''; // Reset bulk status dropdown
-            } else {
-                showMessage('Error loading providers: ' + response.message, 'error');
-                renderProviderTable([]); // Clear table on error
-                renderPagination('providerPagination', 1, providersPerPage, 0, loadProviders); // Clear pagination
-            }
-        })
-        .withFailureHandler(function(error) {
-            showLoading(false);
-            showMessage('Server error loading providers: ' + error.message, 'error');
-            renderProviderTable([]); // Clear table on error
-            renderPagination('providerPagination', 1, providersPerPage, 0, loadProviders); // Clear pagination
-        })
-        .getProviders(options);
-}
-
-/**
- * Renders the provider data in the table.
- * @param {Array<object>} providers The array of provider objects to display.
- */
-function renderProviderTable(providers) {
-    const tableBody = document.getElementById('providerTableBody');
-    tableBody.innerHTML = ''; // Clear existing rows
-    const tableHead = document.getElementById('providerTableHead');
-     tableHead.innerHTML = `<tr><th><input type="checkbox" onchange="toggleSelectAll(this, 'providerTableBody', 'provider')"></th><th>ID</th><th>First Name</th><th>Last Name</th><th>NPI</th><th>Status</th><th>Deactivated</th><th>Actions</th></tr>`;
-
-
-    if (providers.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500">No providers found.</td></tr>';
-        return;
-    }
-
-    providers.forEach(provider => {
-        const row = tableBody.insertRow();
-         row.innerHTML = `
-            <td><input type="checkbox" onchange="toggleIndividualSelection(this, 'provider', '${provider.id}')" ${selectedProviderIds.has(provider.id) ? 'checked' : ''}></td>
-            <td>${provider.id}</td>
-            <td>${provider.firstName}</td>
-            <td>${provider.lastName}</td>
-            <td>${provider.npi || 'N/A'}</td>
-            <td>${provider.credentialingStatus || 'N/A'}</td>
-            <td>${provider.deactivated ? 'Yes' : 'No'}</td>
-            <td class="whitespace-nowrap">
-                <button onclick="loadProviderToForm('${provider.id}')" class="btn-secondary text-xs px-2 py-1">Edit</button>
-                <button onclick="viewProviderDetails('${provider.id}')" class="btn-secondary text-xs px-2 py-1 ml-1">View Profile</button>
-            </td>
-        `;
-    });
-}
-
-/**
- * Handles search input for providers.
- * @param {string} entityType - 'provider' or 'facility'
- */
-function handleSearch(entityType) {
-    if (entityType === 'provider') {
-        // Debounce the search input
-        clearTimeout(state.providerSearchTimer);
-        state.providerSearchTimer = setTimeout(() => {
-            loadProviders(1);
-        }, 300); // 300ms delay
-    } else if (entityType === 'facility') {
-        clearTimeout(state.facilitySearchTimer);
-        state.facilitySearchTimer = setTimeout(() => {
-            loadFacilities(1);
-        }, 300);
-    } else if (entityType === 'requests') {
-        clearTimeout(state.requestSearchTimer);
-        state.requestSearchTimer = setTimeout(() => {
-            loadCredentialingRequests(1);
-        }, 300);
-    } else if (entityType === 'auditLog') {
-         clearTimeout(state.auditLogSearchTimer);
-         state.auditLogSearchTimer = setTimeout(() => {
-             loadEventLogEntries(1);
-         }, 300);
-    } else if (entityType === 'datasetScans') {
-         clearTimeout(state.datasetScanSearchTimer);
-         state.datasetScanSearchTimer = setTimeout(() => {
-             loadDatasetScans(1);
-         }, 300);
-    } else if (entityType === 'profileImports') {
-         clearTimeout(state.profileImportSearchTimer);
-         state.profileImportSearchTimer = setTimeout(() => {
-             loadProfileImports(1);
-         }, 300);
-    } else if (entityType === 'files') {
-        clearTimeout(state.fileSearchTimer);
-        state.fileSearchTimer = setTimeout(() => {
-            loadFiles(1);
-        }, 300);
-    } else if (entityType === 'alerts') {
-         clearTimeout(state.alertSearchTimer);
-         state.alertSearchTimer = setTimeout(() => {
-             loadAlerts(1);
-         }, 300);
-    } else if (entityType === 'notes') {
-        clearTimeout(state.allNotesSearchTimer);
-        state.allNotesSearchTimer = setTimeout(() => {
-            loadAllNotes(1);
-        }, 300);
-    } else if (entityType === 'licenses') {
-        clearTimeout(state.licenseSearchTimer);
-        state.licenseSearchTimer = setTimeout(() => {
-            loadProviderLicenses(1);
-        }, 300);
-    }
-
-}
-
-/**
- * Toggles selection of an individual item for bulk actions.
- * @param {HTMLInputElement} checkbox The checkbox element.
- * @param {string} entityType 'provider' or 'file'
- * @param {string} entityId The ID of the entity.
- */
-function toggleIndividualSelection(checkbox, entityType, entityId) {
-    let selectedSet, countSpanId, controlsId;
-    if (entityType === 'provider') {
-        selectedSet = selectedProviderIds;
-        countSpanId = 'providerSelectionCount';
-        controlsId = 'providerBulkActionControls';
-    } else if (entityType === 'file') {
-        selectedSet = selectedFileIds;
-        countSpanId = 'fileSelectionCount';
-        controlsId = 'fileBulkActionControls';
-    } else {
-        console.error("Unknown entity type for selection:", entityType);
-        return;
-    }
-
-    if (checkbox.checked) {
-        selectedSet.add(entityId);
-    } else {
-        selectedSet.delete(entityId);
-        // Uncheck the "Select All" checkbox if any individual checkbox is unchecked
-        const selectAllCheckbox = document.querySelector(`#${entityType}TableHead input[type="checkbox"]`);
-        if (selectAllCheckbox) {
-            selectAllCheckbox.checked = false;
-        }
-    }
-    updateSelectionCount(countSpanId, selectedSet.size);
-    document.getElementById(controlsId).classList.toggle('hidden', selectedSet.size === 0);
-}
-
-/**
- * Toggles selection of all items on the current page for bulk actions.
- * @param {HTMLInputElement} checkbox The "Select All" checkbox element.
- * @param {string} tableBodyId The ID of the table body element.
- * @param {string} entityType 'provider' or 'file'
- */
-function toggleSelectAll(checkbox, tableBodyId, entityType) {
-    const isChecked = checkbox.checked;
-    const tableBody = document.getElementById(tableBodyId);
-    const checkboxes = tableBody.querySelectorAll('input[type="checkbox"]');
-
-    let selectedSet, countSpanId, controlsId;
-    if (entityType === 'provider') {
-        selectedSet = selectedProviderIds;
-        countSpanId = 'providerSelectionCount';
-        controlsId = 'providerBulkActionControls';
-    } else if (entityType === 'file') {
-        selectedSet = selectedFileIds;
-        countSpanId = 'fileSelectionCount';
-        controlsId = 'fileBulkActionControls';
-    } else {
-         console.error("Unknown entity type for select all:", entityType);
-         return;
-    }
-
-
-    checkboxes.forEach(cb => {
-        cb.checked = isChecked;
-        const entityId = cb.closest('tr').children[1].innerText; // Assuming ID is the second column
-        if (isChecked) {
-            selectedSet.add(entityId);
+    api.run('getProviders', options).then(response => {
+        if (response.success) {
+            state.providers.data = response.data; // Update state with current page data
+            renderProviders(response.data); // Render table rows
+            renderPagination('provider', state.providers.currentPage, config.pageSize, response.totalRecords);
+            populateScanProviderDropdown(); // Re-populate dropdown for dataset scans
         } else {
-            selectedSet.delete(entityId);
+            showMessage(response.message, true);
+            if (providerTableBody) {
+                providerTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500">${response.message}</td></tr>`;
+            }
+            const providerPagination = document.getElementById('providerPagination');
+            if (providerPagination) {
+                providerPagination.innerHTML = '';
+            }
         }
-    });
-    updateSelectionCount(countSpanId, selectedSet.size);
-    document.getElementById(controlsId).classList.toggle('hidden', selectedSet.size === 0);
+    }).catch(err => showMessage(err.message, true));
 }
 
 /**
- * Updates the displayed count of selected items.
- * @param {string} countSpanId The ID of the span element displaying the count.
- * @param {number} count The number of selected items.
- */
-function updateSelectionCount(countSpanId, count) {
-    document.getElementById(countSpanId).innerText = `${count} selected`;
-}
-
-/**
- * Updates the displayed count of selected providers.
- */
-function updateProviderSelectionCount() {
-    updateSelectionCount('providerSelectionCount', selectedProviderIds.size);
-    document.getElementById('providerBulkActionControls').classList.toggle('hidden', selectedProviderIds.size === 0);
-}
-
-/**
- * Handles bulk update for providers.
+ * Handles bulk update for providers (e.g., changing status).
  */
 function bulkUpdateProviders() {
-    const newStatus = document.getElementById('bulkUpdateStatus').value;
-    const providerIds = Array.from(selectedProviderIds);
-
-    if (providerIds.length === 0) {
-        showMessage('No providers selected for bulk update.', 'warning');
+    const providerIds = Array.from(document.querySelectorAll('.provider-checkbox:checked')).map(cb => cb.value);
+    const bulkUpdateStatus = document.getElementById('bulkUpdateStatus');
+    const newStatus = bulkUpdateStatus ? bulkUpdateStatus.value : '';
+    if (providerIds.length === 0 || !newStatus) {
+        showMessage('Please select providers and a new status.', true);
         return;
     }
-    if (!newStatus) {
-        showMessage('Please select a status for the bulk update.', 'warning');
-        return;
-    }
-
-    showConfirmModal('Confirm Bulk Update', `Are you sure you want to set the status to "${newStatus}" for ${providerIds.length} selected providers?`, function() {
-         showLoading(true);
-         google.script.run
-            .withSuccessHandler(function(response) {
-                showLoading(false);
-                if (response.success) {
-                    showMessage(response.message, 'success');
-                    selectedProviderIds.clear(); // Clear selection after update
-                    updateProviderSelectionCount();
-                    document.getElementById('bulkUpdateStatus').value = ''; // Reset dropdown
-                    loadProviders(currentProviderPage); // Reload the current page
+    showConfirmModal(
+        'Bulk Update Providers',
+        `Are you sure you want to update the status to "${newStatus}" for ${providerIds.length} selected providers?`,
+        () => {
+            api.run('bulkUpdateProviderStatus', providerIds, newStatus).then(res => {
+                if (res.success) {
+                    showMessage(res.message);
+                    loadProviders(state.providers.currentPage);
                 } else {
-                    showMessage('Error performing bulk update: ' + response.message, 'error');
+                    showMessage(res.message, true);
                 }
-            })
-            .withFailureHandler(function(error) {
-                showLoading(false);
-                showMessage('Server error during bulk update: ' + error.message, 'error');
-            })
-            .bulkUpdateProvidersStatus(providerIds, newStatus);
-    });
+            }).catch(err => showMessage(err.message, true));
+        }
+    );
 }
 
 /**
- * Opens the modal to view a provider's full profile.
- * @param {string} providerId The ID of the provider.
+ * Updates the UI for bulk action controls based on selected providers.
  */
-function viewProviderDetails(providerId) {
-    showLoading(true);
-    google.script.run
-        .withSuccessHandler(function(response) {
-            showLoading(false);
-            if (response.success) {
-                renderProviderDetailsModal(response.data);
-                openModal('providerDetailsModal');
-            } else {
-                showMessage('Error loading provider details: ' + response.message, 'error');
-            }
-        })
-        .withFailureHandler(function(error) {
-            showLoading(false);
-            showMessage('Server error loading provider details: ' + error.message, 'error');
-        })
-        .getProviderDetails(providerId);
+function updateBulkActionUI() {
+    const selectedCheckboxes = document.querySelectorAll('.provider-checkbox:checked');
+    const count = selectedCheckboxes.length;
+    document.getElementById('providerSelectionCount').textContent = `${count} selected`;
+    document.getElementById('providerBulkActionControls').classList.toggle('hidden', count === 0);
 }
 
 /**
- * Renders the content of the provider details modal.
- * @param {object} provider The provider object with all related data.
+ * Toggles selection of all provider checkboxes on the current page.
+ * @param {HTMLInputElement} selectAllCheckbox - The "Select All" checkbox.
+ */
+function handleSelectAllProviders(selectAllCheckbox) {
+    const isChecked = selectAllCheckbox.checked;
+    document.querySelectorAll('.provider-checkbox').forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+    updateBulkActionUI();
+}
+
+// --- Provider Details Modal & Sub-Entity Rendering ---
+
+/**
+ * Opens the modal to view comprehensive details for a specific provider.
+ * Fetches all related data (aliases, addresses, licenses, notes, etc.).
+ * @param {string} providerId - The ID of the provider to display.
+ */
+async function viewProviderDetails(providerId) {
+    openModal('providerDetailsModal');
+    const contentDiv = document.getElementById('providerDetailsContent');
+    const modalProviderName = document.getElementById('modalProviderName');
+    if (contentDiv) contentDiv.innerHTML = '<p class="text-center">Loading provider details...</p>';
+    if (modalProviderName) modalProviderName.textContent = 'Loading...';
+
+    try {
+        const response = await api.run('getProviderDetails', providerId);
+        if (response.success) {
+            const provider = response.data;
+            if (document.getElementById('providerDetailsModal')) {
+                document.getElementById('providerDetailsModal').dataset.providerId = provider.id;
+            }
+            if (modalProviderName) modalProviderName.textContent = `${provider.firstName} ${provider.lastName}`;
+            renderProviderDetailsModal(provider);
+        } else {
+            if (contentDiv) contentDiv.innerHTML = `<p class="text-center text-red-500">${response.message}</p>`;
+            showMessage(response.message, true);
+        }
+    } catch (err) {
+        if (contentDiv) contentDiv.innerHTML = `<p class="text-center text-red-500">${err.message}</p>`;
+        showMessage(err.message, true);
+    }
+}
+
+/**
+ * Renders the content of the provider details modal using schema-driven tables and sections.
+ * This function orchestrates the display of all sub-entities.
+ * @param {object} provider - The comprehensive provider object with all related data.
  */
 function renderProviderDetailsModal(provider) {
-    document.getElementById('modalProviderName').innerText = `${provider.firstName} ${provider.lastName}`;
     const contentDiv = document.getElementById('providerDetailsContent');
+    if (!contentDiv) return;
+
     contentDiv.innerHTML = ''; // Clear previous content
 
-    let html = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div><strong>ID:</strong> ${provider.id}</div>
-            <div><strong>NPI:</strong> ${provider.npi || 'N/A'}</div>
-            <div><strong>Credentialing Status:</strong> ${provider.credentialingStatus || 'N/A'}</div>
-            <div><strong>Next Credentialing Date:</strong> ${provider.nextCredentialingDate || 'N/A'}</div>
-            <div><strong>Deactivated:</strong> ${provider.deactivated ? 'Yes' : 'No'}</div>
-        </div>
-    `;
+    // 1. Basic Information Section
+    contentDiv.appendChild(createDetailSection('Basic Information', provider, [
+        'id', 'npi', 'credentialingStatus', 'nextCredentialingDate', 'deactivated'
+    ]));
 
-    // Sections for related data
-    html += renderSection('Aliases', provider.aliases, ['firstName', 'lastName'], provider.id, 'aliases');
-    html += renderSection('Addresses', provider.addresses, ['type', 'addressLine1', 'city', 'state', 'zipCode'], provider.id, 'addresses');
-    html += renderSection('Emails', provider.emails, ['type', 'email'], provider.id, 'emails');
-    html += renderSection('Licenses', provider.licenses, ['licenseNumber', 'state', 'currentVerificationStatus', 'nonVerifiedExpirationDate'], provider.id, 'licenses', renderLicenseActions); // Add renderLicenseActions
-    html += renderSection('Education', provider.education, ['schoolName', 'degree', 'endDate'], provider.id, 'education');
-    html += renderSection('Training', provider.training, ['institutionName', 'speciality', 'endDate'], provider.id, 'training');
-    html += renderSection('Work History', provider.workHistory, ['name', 'jobTitle', 'isCurrentEmployer', 'startDate', 'endDate'], provider.id, 'workHistory');
-    html += renderSection('Board Certifications', provider.boardCertifications, ['type', 'specialty', 'expirationDate'], provider.id, 'boardCertifications');
-    html += renderSection('DEA Registrations', provider.deaRegistrations, ['registrationNumber', 'lastUpdatedAt'], provider.id, 'deaRegistrations');
-    html += renderSection('Certificates', provider.certificates, ['type', 'certificateNumber', 'expirationDate'], provider.id, 'certificates');
-    html += renderSection('CAQH Info', provider.caqhInfo, ['caqhId', 'lastUpdatedAt'], provider.id, 'caqhInfo');
-    html += renderSection('Liability Insurance', provider.liabilityInsurances, ['name', 'currentExpirationDate', 'policyNumber'], provider.id, 'liabilityInsurances');
-    html += renderSection('Enrollments', provider.enrollments, ['groupName', 'payerName', 'payerPlanName', 'enrollmentStatus', 'effectiveDate'], provider.id, 'enrollments'); // Added enrollments
-    html += renderSection('Files', provider.files, ['path', 'createdAt', 'createdBy'], provider.id, 'files', renderFileActions); // Added files with actions
-    html += renderSection('Notes', provider.notes, ['note', 'timestamp', 'userEmail'], provider.id, 'notes', renderNoteActions); // Added notes with actions
-    html += renderSection('Profile Imports', provider.imports, ['source', 'status', 'started', 'completed'], provider.id, 'profileImports', renderImportActions); // Added imports with actions
-    html += renderSection('Dataset Scans', provider.scans, ['type', 'status', 'started', 'completed'], provider.id, 'datasetScans', renderScanActions); // Added scans with actions
+    // 2. Aliases Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Aliases',
+        schemaName: 'providerAlias',
+        dataArray: provider.aliases,
+        entityId: provider.id,
+        columns: [
+            { header: 'First Name', key: 'firstName' },
+            { header: 'Last Name', key: 'lastName' },
+            { header: 'Actions', isAction: true } // Uses schema's create/update/delete APIs
+        ]
+    }));
 
-    contentDiv.innerHTML = html;
+    // 3. Addresses Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Addresses',
+        schemaName: 'providerAddress',
+        dataArray: provider.addresses,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Address', key: 'addressLine1' },
+            { header: 'City', key: 'city' },
+            { header: 'State', key: 'state' },
+            { header: 'Zip', key: 'zipCode' },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-    // Add event listeners for Add/Edit/Delete buttons in sections
-    contentDiv.querySelectorAll('.btn-add-sub-entity').forEach(button => {
-        button.onclick = () => openDynamicFormModal(button.dataset.entityType, button.dataset.parentId);
-    });
-    // Attach event listeners for 'Edit' buttons dynamically if needed, using event delegation or specific functions
+    // 4. Emails Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Emails',
+        schemaName: 'providerEmail',
+        dataArray: provider.emails,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Email', key: 'email' },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-    const footerDiv = document.getElementById('providerDetailsFooter');
-    footerDiv.innerHTML = `<button onclick="closeModal('providerDetailsModal')" class="btn-secondary">Close</button>`;
-}
+    // 5. Education Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Education',
+        schemaName: 'providerEducation',
+        dataArray: provider.education,
+        entityId: provider.id,
+        columns: [
+            { header: 'School', key: 'schoolName' },
+            { header: 'Degree', key: 'degree' },
+            { header: 'End Date', key: 'endDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-/**
- * Renders the actions column for Licenses in the details modal.
- * @param {object} license The license object.
- * @param {string} parentId The ID of the parent entity (provider).
- * @returns {string} HTML string for the actions buttons.
- */
-function renderLicenseActions(license, parentId) {
-    return `<button onclick="openLicenseVerificationsModal('${parentId}', '${license.id}', '${license.licenseNumber}', '${document.getElementById('modalProviderName').innerText}')" class="btn-secondary text-xs px-2 py-1">View Verifications</button>`;
-}
+    // 6. Training Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Training',
+        schemaName: 'providerTraining',
+        dataArray: provider.training,
+        entityId: provider.id,
+        columns: [
+            { header: 'Institution', key: 'institutionName' },
+            { header: 'Speciality', key: 'speciality' },
+            { header: 'Type', key: 'trainingType' },
+            { header: 'End Date', key: 'endDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-// Helper for rendering file actions in details modal
-function renderFileActions(file, parentId) {
-     const fileUrl = file.path;
-     const filename = fileUrl ? fileUrl.substring(fileUrl.lastIndexOf('/') + 1) : 'Unknown File';
-     return `
-         <button onclick="viewFileDetails('${file.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
-     `;
- }
+    // 7. Work History Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Work History',
+        schemaName: 'providerWorkHistory',
+        dataArray: provider.workHistory,
+        entityId: provider.id,
+        columns: [
+            { header: 'Employer', key: 'name' },
+            { header: 'Job Title', key: 'jobTitle' },
+            { header: 'Current', key: 'isCurrentEmployer', render: (item) => item.isCurrentEmployer ? 'Yes' : 'No' },
+            { header: 'End Date', key: 'endDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-// Helper for rendering note actions in details modal
-function renderNoteActions(note, parentId) {
-     return `
-         <button onclick="openEditNoteModal('${note.id}', '${note.note}', '${note.timestamp}', '${note.userEmail}')" class="btn-secondary text-xs px-2 py-1">Edit</button>
-     `;
- }
+    // 8. Board Certifications Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Board Certifications',
+        schemaName: 'providerBoardCertification',
+        dataArray: provider.boardCertifications,
+        entityId: provider.id,
+        columns: [
+            { header: 'Board', key: 'type' },
+            { header: 'Specialty', key: 'specialty' },
+            { header: 'Expires', key: 'expirationDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-// Helper for rendering import actions in details modal
-function renderImportActions(importJob, parentId) {
-    return `
-        <button onclick="openProfileImportDetailsModal('${importJob.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
-    `;
-}
+    // 9. DEA Registrations Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'DEA Registrations',
+        schemaName: 'providerDea',
+        dataArray: provider.deaRegistrations,
+        entityId: provider.id,
+        columns: [
+            { header: 'Number', key: 'registrationNumber' },
+            { header: 'Last Updated', key: 'lastUpdatedAt', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-// Helper for rendering scan actions in details modal
-function renderScanActions(scan, parentId) {
-    return `
-        <button onclick="openScanDetailsModal('${scan.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
-    `;
-}
+    // 10. Certificates Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Certificates',
+        schemaName: 'providerCertificate',
+        dataArray: provider.certificates,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Number', key: 'certificateNumber' },
+            { header: 'Expires', key: 'expirationDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
 
-/**
- * Handles the response from the generic createSubEntity function.
- * Reloads the parent's details modal after successful creation.
- * @param {string} entityType The type of entity created.
- * @param {string} parentId The ID of the parent entity.
- * @param {object} response The success/error response.
- */
-function handleCreateSubEntityResponse(entityType, parentId, response) {
-    showLoading(false);
-    if (response.success) {
-        showMessage(`${response.message}`, 'success');
-        closeModal('dynamicFormModal');
-        // Reload the parent details modal (Provider or Facility)
-        if (entityType.startsWith('provider')) {
-            viewProviderDetails(parentId);
-        } else if (entityType.startsWith('facility')) {
-            viewFacilityDetails(parentId);
-        }
+    // 11. CAQH Information Section (Special Handling as it's a single record)
+    const caqhSection = document.createElement('div');
+    const caqhInfo = provider.caqhInfo && provider.caqhInfo.length > 0 ? provider.caqhInfo[0] : null;
+    caqhSection.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">CAQH Information</h3>`;
+    if (caqhInfo) {
+        caqhSection.innerHTML += `
+            <div class="text-sm p-2 bg-gray-50 rounded-lg flex justify-between items-center">
+                <div><strong>CAQH ID:</strong> ${caqhInfo.caqhId} <span class="text-xs text-gray-500 ml-2">(Last Updated: ${new Date(caqhInfo.lastUpdatedAt).toLocaleDateString()})</span></div>
+                <div>
+                    <button onclick="openDynamicFormModal('providerCaqh', '${provider.id}', '${encodeURIComponent(JSON.stringify(caqhInfo))}')"
+                        class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                    <button onclick="deleteDynamicFormEntity('providerCaqh', '${caqhInfo.id}', '${provider.id}')"
+                        class="text-red-600 hover:underline text-xs">Delete</button>
+                </div>
+            </div>`;
     } else {
-        showMessage(`Error adding ${entityType}: ${response.message}`, 'error');
+        caqhSection.innerHTML += `<p class="text-sm text-gray-500">No CAQH information found.</p>
+            <button onclick="openDynamicFormModal('providerCaqh', '${provider.id}', null)"
+                class="btn-primary text-sm mt-2">Add CAQH Info</button>`;
+    }
+    contentDiv.appendChild(caqhSection);
+
+    // 12. Liability Insurance Table
+    contentDiv.appendChild(createDetailTable({
+        title: 'Liability Insurance',
+        schemaName: 'providerLiabilityInsurance',
+        dataArray: provider.liabilityInsurances,
+        entityId: provider.id,
+        columns: [
+            { header: 'Insurer', key: 'name' },
+            { header: 'Policy #', key: 'policyNumber' },
+            { header: 'Expires', key: 'currentExpirationDate', isDate: true },
+            { header: 'Actions', isAction: true }
+        ]
+    }));
+
+    // 13. Licenses Table (with custom action for verifications)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Licenses',
+        schemaName: 'providerLicense', // Schema for adding/editing licenses
+        dataArray: provider.licenses,
+        entityId: provider.id,
+        columns: [
+            { header: 'Number', key: 'licenseNumber' },
+            { header: 'State', key: 'state' },
+            { header: 'Expires', key: 'nonVerifiedExpirationDate', isDate: true },
+            { header: 'Status', key: 'currentVerificationStatus' },
+            {
+                header: 'Actions', key: 'id', render: (item) => `
+                    <button onclick="openDynamicFormModal('providerLicense', '${provider.id}', '${encodeURIComponent(JSON.stringify(item))}')"
+                        class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                    <button onclick="detachLicenseFromProvider('${item.id}', '${provider.id}')"
+                        class="text-red-600 hover:underline text-xs mr-2">Detach</button>
+                    <button onclick="viewLicenseVerifications('${provider.id}', '${item.id}', '${item.licenseNumber}')"
+                        class="text-green-600 hover:underline text-xs">View Verifications</button>
+                `
+            }
+        ],
+        showAddButton: false // Custom add button below
+    }));
+    // Custom "Attach License" button
+    const attachLicenseButton = document.createElement('button');
+    attachLicenseButton.className = 'btn-primary text-sm mt-2';
+    attachLicenseButton.textContent = 'Attach License';
+    attachLicenseButton.onclick = () => openDynamicFormModal('providerLicense', provider.id, null); // Use dynamic form for license
+    contentDiv.lastChild.appendChild(attachLicenseButton); // Append to the last added section (Licenses table)
+
+
+    // 14. Enrollments Table (read-only for now, but could be made editable with a schema)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Enrollments',
+        schemaName: 'providerEnrollment', // Use the new schema
+        dataArray: provider.enrollments,
+        entityId: provider.id, // Parent ID for enrollments is provider.id
+        columns: [
+            { header: 'Group', key: 'groupName' },
+            { header: 'Payer', key: 'payerName' },
+            { header: 'Plan', key: 'payerPlanName' },
+            { header: 'Status', key: 'enrollmentStatus' },
+            { header: 'Effective Date', key: 'effectiveDate', isDate: true },
+            {
+                header: 'Actions', isAction: true, render: (item) => `
+                    <button onclick="openDynamicFormModal('providerEnrollment', '${provider.id}', '${encodeURIComponent(JSON.stringify(item))}', populateEnrollmentFormDropdowns)"
+                        class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                    <button onclick="deleteDynamicFormEntity('providerEnrollment', '${item.id}', '${provider.id}')"
+                        class="text-red-600 hover:underline text-xs">Delete</button>
+                `
+            }
+        ],
+        // Custom add button for enrollments, which needs dynamic dropdowns
+        showAddButton: false
+    }));
+    const addEnrollmentButton = document.createElement('button');
+    addEnrollmentButton.className = 'btn-primary text-sm mt-2';
+    addEnrollmentButton.textContent = 'Add Enrollment';
+    addEnrollmentButton.onclick = () => openDynamicFormModal('providerEnrollment', provider.id, null, populateEnrollmentFormDropdowns);
+    contentDiv.lastChild.appendChild(addEnrollmentButton);
+
+
+    // 15. Files Management Section
+    contentDiv.appendChild(createFileManagementSection(provider.files, 'provider', provider.id));
+
+    // 16. Notes Section
+    contentDiv.appendChild(createNotesSection(provider.notes, 'provider', provider.id));
+
+    // 17. Profile Imports Table (read-only for now)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Profile Imports',
+        dataArray: provider.profiles,
+        entityId: provider.id,
+        columns: [
+            { header: 'Source', key: 'source' },
+            { header: 'Status', key: 'status' },
+            { header: 'Started', key: 'started', isDate: true },
+            { header: 'Completed', key: 'completed', isDate: true }
+        ],
+        showAddButton: false // Imports initiated from a separate tab
+    }));
+
+    // 18. Dataset Scans Table (read-only for now)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Dataset Scans',
+        dataArray: provider.scans,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Status', key: 'status' },
+            { header: 'Started', key: 'started', isDate: true },
+            { header: 'Completed', key: 'completed', isDate: true },
+            { header: 'Trigger', key: 'trigger' },
+            { header: 'Actions', key: 'id', render: (item) => `<button onclick="viewScanDetails('${item.id}')" class="text-blue-600 hover:underline text-xs">View Details</button>` }
+        ],
+        showAddButton: false // Scans initiated from Reporting tab
+    }));
+
+    // 19. Credentialing Requests Table (read-only for now)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Credentialing Requests',
+        dataArray: provider.requests,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Status', key: 'status' },
+            { header: 'Owner', key: 'owner' },
+            { header: 'Created At', key: 'createdAt', isDate: true },
+            { header: 'Actions', key: 'id', render: (item) => `<button onclick="viewCredentialingRequest('${item.id}')" class="text-blue-600 hover:underline text-xs">View Details</button>` }
+        ],
+        showAddButton: false // Requests can be created from modal footer
+    }));
+
+    // 20. Monitors Table (read-only for now)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Monitors',
+        dataArray: provider.monitors,
+        entityId: provider.id,
+        columns: [
+            { header: 'Type', key: 'type' },
+            { header: 'Target', key: 'datasetType', render: (item) => item.datasetType || item.licenseId || 'N/A' },
+            { header: 'Interval', key: 'monitoringInterval' },
+            { header: 'Next Run', key: 'nextMonitoringDate', isDate: true },
+            { header: 'Last Run', key: 'lastMonitoringDate', isDate: true }
+        ],
+        showAddButton: false // Monitors managed from Monitoring tab
+    }));
+
+    // 21. Alerts Table (read-only for now)
+    contentDiv.appendChild(createDetailTable({
+        title: 'Alerts',
+        dataArray: provider.alerts,
+        entityId: provider.id,
+        columns: [
+            { header: 'Timestamp', key: 'timestamp', isDate: true },
+            { header: 'Type', key: 'type' },
+            { header: 'Details', key: 'data', render: (item) => item.data && item.data.messageTemplate || JSON.stringify(item.data) },
+            { header: 'Dismissed', key: 'dismissalTimestamp', render: (item) => item.dismissalTimestamp ? 'Yes' : 'No' }
+        ],
+        showAddButton: false // Alerts are system-generated
+    }));
+
+
+    // Modal Footer Actions
+    const footer = document.getElementById('providerDetailsFooter');
+    if (footer) {
+        footer.innerHTML = `
+            <button onclick="createRequestFromModal('provider', '${provider.id}')" class="btn-primary">Create Credentialing Request</button>
+            <button onclick="closeModal('providerDetailsModal')" class="btn-secondary">Close</button>
+        `;
     }
 }
 
 /**
- * Handles the response from the generic deleteSubEntity function.
- * Reloads the parent's details modal after successful deletion.
- * @param {string} entityType The type of entity deleted.
- * @param {string} parentId The ID of the parent entity.
- * @param {object} response The success/error response.
+ * Populates the dropdowns for Group and Payer Plan in the Provider Enrollment dynamic form.
+ * This function is passed as a callback to openDynamicFormModal.
+ * @param {string} parentId - The providerId, though not directly used for dropdown population here.
+ * @param {object|null} entityData - The enrollment data if editing, or null if creating.
  */
-function handleDeleteSubEntityResponse(entityType, parentId, response) {
-    showLoading(false);
-    if (response.success) {
-        showMessage(response.message, 'success');
-        // Reload the parent details modal (Provider or Facility)
-        if (entityType.startsWith('provider')) {
-            viewProviderDetails(parentId);
-        } else if (entityType.startsWith('facility')) {
-            viewFacilityDetails(parentId);
+async function populateEnrollmentFormDropdowns(parentId, entityData) {
+    const groupIdSelect = document.getElementById('dynamic-form-field-groupId');
+    const payerPlanIdSelect = document.getElementById('dynamic-form-field-payerPlanId');
+
+    if (!groupIdSelect || !payerPlanIdSelect) {
+        console.error("Enrollment form dropdowns not found.");
+        return;
+    }
+
+    // Populate Group Dropdown
+    try {
+        const groupsRes = await api.run('listGroups');
+        if (groupsRes.success) {
+            groupIdSelect.innerHTML = '<option value="">-- Select Group --</option>';
+            groupsRes.data.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.name;
+                groupIdSelect.appendChild(option);
+            });
+            if (entityData && entityData.groupId) {
+                groupIdSelect.value = entityData.groupId;
+            }
+        } else {
+            showMessage(`Failed to load groups for enrollment: ${groupsRes.message}`, true);
         }
-    } else {
-        showMessage(`Error deleting ${entityType}: ${response.message}`, 'error');
+    } catch (err) {
+        showMessage(`Error loading groups for enrollment: ${err.message}`, true);
+    }
+
+    // Populate Payer Plan Dropdown
+    try {
+        const payerPlansRes = await api.run('listPayerPlans'); // list all plans, not filtered by payer
+        if (payerPlansRes.success) {
+            payerPlanIdSelect.innerHTML = '<option value="">-- Select Payer Plan --</option>';
+            payerPlansRes.data.forEach(plan => {
+                const option = document.createElement('option');
+                option.value = plan.id;
+                option.textContent = `${plan.name} (${plan.state || 'N/A'})`;
+                payerPlanIdSelect.appendChild(option);
+            });
+            if (entityData && entityData.payerPlanId) {
+                payerPlanIdSelect.value = entityData.payerPlanId;
+            }
+        } else {
+            showMessage(`Failed to load payer plans for enrollment: ${payerPlansRes.message}`, true);
+        }
+    } catch (err) {
+        showMessage(`Error loading payer plans for enrollment: ${err.message}`, true);
     }
 }
+
+
+// --- Helper Functions (Assumed to be in 18_Rendering.js.html or globally accessible) ---
+// renderProviders, renderPagination, showMessage, handleSaveResponse, openModal, closeModal,
+// createDetailSection, createDetailTable, createFileManagementSection, createNotesSection,
+// openDynamicFormModal, deleteDynamicFormEntity, viewLicenseVerifications, detachLicenseFromProvider,
+// viewScanDetails, viewCredentialingRequest, createRequestFromModal
+// are assumed to be defined elsewhere and correctly imported/accessible.
 
 </script>
