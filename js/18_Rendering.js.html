@@ -1,0 +1,652 @@
+<script>
+    // =================================================================
+    // 7. RENDERING FUNCTIONS (GENERIC)
+    // =================================================================
+
+    /**
+     * Renders pagination controls for a table.
+     * @param {string} type - The type of entity being paginated (e.g., 'provider', 'facility').
+     * @param {number} currentPage - The current page number.
+     * @param {number} pageSize - The number of items per page.
+     * @param {number} totalRecords - The total number of records.
+     */
+    function renderPagination(type, currentPage, pageSize, totalRecords) {
+        const paginationContainer = document.getElementById(`${type}Pagination`);
+        if (!paginationContainer) return; // Ensure paginationContainer exists
+        const totalPages = Math.ceil(totalRecords / pageSize);
+        if (totalPages <= 1) {
+            paginationContainer.innerHTML = '';
+            return;
+        }
+        const prevDisabled = currentPage === 1 ? 'disabled' : '';
+        const nextDisabled = currentPage >= totalPages ? 'disabled' : '';
+
+        let loadFunc;
+        // Map entity types to their respective load functions
+        if (type === 'provider') loadFunc = 'loadProviders';
+        else if (type === 'facility') loadFunc = 'loadFacilities';
+        else if (type === 'notes') loadFunc = 'loadAllNotes';
+        else if (type === 'auditLog') loadFunc = 'loadEventLogEntries';
+        else if (type === 'profileImports') loadFunc = 'loadProfileImports';
+        else if (type === 'files') loadFunc = 'loadFiles';
+        else if (type === 'alerts') loadFunc = 'loadAlerts';
+        else if (type === 'webhooks') loadFunc = 'loadWebhooks'; // Note: Webhooks likely don't need pagination based on prior code, but included for completeness.
+        else if (type === 'monitors') loadFunc = 'loadMonitors';
+        else if (type === 'datasetScans') loadFunc = 'loadDatasetScans';
+        else if (type === 'reports') loadFunc = 'loadGeneratedReports'; // Note: Reports likely don't need pagination.
+        else if (type === 'providerLicenses') loadFunc = 'loadProviderLicenses';
+        else return;
+
+        paginationContainer.innerHTML = `
+            <button onclick="${loadFunc}(${currentPage - 1})" class="btn-secondary text-sm" ${prevDisabled}>&laquo; Previous</button>
+            <span class="text-sm text-gray-700">Page ${currentPage} of ${totalPages} (${totalRecords} records)</span>
+            <button onclick="${loadFunc}(${currentPage + 1})" class="btn-secondary text-sm" ${nextDisabled}>Next &raquo;</button>
+        `;
+    }
+
+    /**
+     * Renders table headers with sorting capability.
+     * Note: This function relies on global 'state' and 'setSort'.
+     * @param {string} type - The type of entity for the table headers.
+     */
+    function renderTableHeaders(type) {
+        // This configuration is specific to the table structures in the original HTML
+        // If table structures change, this config must be updated or made more dynamic
+        const headersConfig = {
+            provider: [{
+                key: 'id',
+                label: 'ID'
+            }, {
+                key: 'firstName',
+                label: 'First Name'
+            }, {
+                key: 'lastName',
+                label: 'Last Name'
+            }, {
+                key: 'npi',
+                label: 'NPI'
+            }, {
+                key: 'nextCredentialingDate',
+                label: 'Next Credentialing Date'
+            }, {
+                key: 'credentialingStatus',
+                label: 'Status'
+            }, {
+                key: 'deactivated',
+                label: 'Deactivated'
+            }, {
+                key: null,
+                label: 'Actions'
+            }],
+            facility: [{
+                key: 'id',
+                label: 'ID'
+            }, {
+                key: 'name',
+                label: 'Name'
+            }, {
+                key: 'city',
+                label: 'City'
+            }, {
+                key: 'state',
+                label: 'State'
+            }, {
+                key: 'deactivated',
+                label: 'Deactivated'
+            }, {
+                key: null,
+                label: 'Actions'
+            }]
+        };
+
+        const currentHeaders = headersConfig[type] || [];
+        const headElement = document.getElementById(`${type}TableHead`);
+        if (!headElement) return; // Ensure headElement exists
+
+        headElement.innerHTML = '';
+        const headerRow = headElement.insertRow();
+
+        // Add select all checkbox for providers
+        if (type === 'provider') {
+            headerRow.insertCell().innerHTML = `<input type="checkbox" onchange="handleSelectAllProviders(this)" title="Select All">`;
+        }
+
+        currentHeaders.forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header.label;
+            if (header.key) {
+                th.style.cursor = 'pointer';
+                // Assumes a global setSort function exists and updates state
+                th.onclick = () => setSort(type, header.key);
+                const currentSortBy = state[type].sortBy;
+                const currentSortOrder = state[type].sortOrder;
+                if (header.key === currentSortBy) th.innerHTML += currentSortOrder === 'asc' ? ' &#9650;' : ' &#9660;';
+            }
+            headerRow.appendChild(th);
+        });
+    }
+
+
+    /**
+     * Creates an HTML section to display details for a single entity or a part of an entity.
+     * @param {string} title - The title for the section.
+     * @param {object} data - The data object containing the details.
+     * @param {string[]} keys - An array of keys from the data object to display.
+     * @returns {HTMLElement} The created section div.
+     */
+    function createDetailSection(title, data, keys) {
+        const section = document.createElement('div');
+        section.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">${title}</h3>`;
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm';
+
+        keys.forEach(key => {
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            let value = data && data[key] !== undefined && data[key] !== null ? data[key] : 'N/A';
+
+            // Basic date formatting
+            if (key.toLowerCase().includes('date') && value !== 'N/A') {
+                try {
+                    value = new Date(value).toLocaleDateString();
+                } catch (e) {
+                    value = String(value); // Display as is if date formatting fails
+                }
+            }
+            grid.innerHTML += `<div><strong>${label}:</strong> <span>${value}</span></div>`;
+        });
+
+        section.appendChild(grid);
+        return section;
+    }
+
+
+    /**
+     * Creates a filter input element for a modal table.
+     * This is a client-side filter for already-rendered data.
+     * @param {string} title - The title of the section, used for placeholder text.
+     * @param {string} tableId - The ID of the table this filter will control.
+     * @returns {HTMLElement} The container div for the filter input.
+     */
+    function createTableFilter(title, tableId) {
+        const filterInputId = `filter-input-${tableId}`;
+        const filterContainer = document.createElement('div');
+        filterContainer.className = 'my-2';
+        // Assumes a global filterModalTable function exists
+        filterContainer.innerHTML = `
+            <label for="${filterInputId}" class="sr-only">Filter ${title}</label>
+            <input type="text" id="${filterInputId}" onkeyup="filterModalTable('${filterInputId}', '${tableId}')" placeholder="Filter ${title}..." class="text-sm p-1 rounded-md border-gray-300 w-full md:w-1/2">
+        `;
+        return filterContainer;
+    }
+
+    /**
+     * Creates the main table element with its header row and an empty tbody.
+     * @param {string} tableId - The ID for the new table.
+     * @param {Array<object>} columns - The column configuration array (objects with 'key', 'header', 'isDate', 'isAction', 'render').
+     * @returns {HTMLTableElement} The created table element with its header.
+     */
+    function createTableElement(tableId, columns) {
+        const table = document.createElement('table');
+        table.id = tableId;
+        table.className = 'min-w-full text-sm';
+
+        const thead = table.createTHead();
+        const headerRow = thead.insertRow();
+        columns.forEach(colConfig => {
+            const th = document.createElement('th');
+            th.textContent = colConfig.header || colConfig.key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            th.className = 'px-2 py-1 text-left text-gray-600 uppercase font-semibold text-xs'; // Add some styling
+            headerRow.appendChild(th);
+        });
+
+        table.createTBody(); // Create empty tbody to be populated later
+        return table;
+    }
+
+    /**
+     * Renders the content for a single table cell based on the column configuration.
+     * Note: This function relies on global 'formSchemas', 'openDynamicFormModal', and 'deleteDynamicFormEntity'.
+     * @param {HTMLTableCellElement} cell - The cell element to render into.
+     * @param {object} item - The data object for the current row.
+     * @param {object} colConfig - The configuration for the current column.
+     * @param {string} schemaName - The schema name for generating action buttons.
+     * @param {string} entityId - The parent entity's ID.
+     */
+    function renderTableCell(cell, item, colConfig, schemaName, entityId) {
+        cell.className = 'px-2 py-1 border-b border-gray-200'; // Add some styling
+
+        if (colConfig.isAction && schemaName) { // Ensure schemaName is provided for actions
+            const schema = formSchemas[schemaName];
+            let deleteButtonHtml = '';
+            // Check if schema exists and has a delete API defined
+            if (schema && schema.deleteApi) {
+                deleteButtonHtml = `<button onclick="deleteDynamicFormEntity('${schemaName}', '${item.id}', '${entityId}')" class="text-red-600 hover:underline text-xs ml-2">Delete</button>`;
+            }
+            // Assumes global openDynamicFormModal and deleteDynamicFormEntity exist
+            cell.innerHTML = `
+                <button onclick="openDynamicFormModal('${schemaName}', '${entityId}', '${encodeURIComponent(JSON.stringify(item))}')" class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                ${deleteButtonHtml}
+            `;
+        } else if (colConfig.render && typeof colConfig.render === 'function') {
+            cell.innerHTML = colConfig.render(item, entityId); // Pass entityId to render function if needed
+        } else {
+            let value = item && item[colConfig.key] !== undefined && item[colConfig.key] !== null ? item[colConfig.key] : 'N/A';
+
+            // Basic date formatting for cells marked as isDate
+            if (colConfig.isDate && value !== 'N/A') {
+                try {
+                    value = new Date(value).toLocaleDateString();
+                } catch (e) {
+                    value = String(value); // Display as is if date formatting fails
+                }
+            }
+            cell.textContent = value;
+        }
+    }
+
+
+    /**
+     * Creates a section with a table populated with data, including an optional filter and add button.
+     * Note: Relies on createTableFilter, createTableElement, populateTableBody, and createAddButton.
+     * @param {object} config - Configuration object.
+     * @param {string} config.title - The title for the section and add button.
+     * @param {string} config.schemaName - The schema name for dynamic forms (optional).
+     * @param {Array<object>} config.dataArray - The array of data objects to display.
+     * @param {string} config.entityId - The ID of the parent entity.
+     * @param {Array<object>} config.columns - The column configuration array.
+     * @param {boolean} [config.showAddButton=true] - Whether to show the "Add" button.
+     * @returns {HTMLElement} The created section div.
+     */
+    function createDetailTable(config) {
+        const {
+            title,
+            schemaName,
+            dataArray,
+            entityId,
+            columns,
+            showAddButton = true
+        } = config;
+
+        const section = document.createElement('div');
+        section.className = 'detail-section'; // Add a class for potential styling
+        section.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">${title}</h3>`;
+
+        // Create a unique ID for the table based on schemaName and entityId
+        const tableId = `${schemaName ? schemaName.replace(/([A-Z])/g, '-$1').toLowerCase() : 'table'}-${entityId || 'modal'}`;
+
+        // Add filter only if there's data to filter (and columns are defined)
+        if (dataArray && dataArray.length > 0 && columns && columns.length > 0) {
+            section.appendChild(createTableFilter(title, tableId));
+        }
+
+        const table = createTableElement(tableId, columns);
+
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'overflow-x-auto';
+        tableContainer.appendChild(table);
+        section.appendChild(tableContainer);
+
+        // The populate function now handles the "no data" message inside the tbody
+        populateTableBody(table.tBodies[0], dataArray, columns, schemaName, entityId);
+
+
+        // Add the "Add" button if applicable
+        if (showAddButton && schemaName) {
+            section.appendChild(createAddButton(title, schemaName, entityId));
+        }
+
+        return section;
+    }
+
+    /**
+     * Populates the body of a table with data rows, or a "no data" message.
+     * Note: Relies on renderTableCell.
+     * @param {HTMLTableSectionElement} tbody - The tbody element to populate.
+     * @param {Array<object>} dataArray - The array of data objects.
+     * @param {Array<object>} columns - The column configuration array.
+     * @param {string} schemaName - The schema name for generating action buttons (optional).
+     * @param {string} entityId - The parent entity's ID (optional).
+     */
+    function populateTableBody(tbody, dataArray, columns, schemaName, entityId) {
+        tbody.innerHTML = ''; // Clear previous content
+
+        if (!dataArray || dataArray.length === 0) {
+            const cell = tbody.insertRow().insertCell();
+            // Ensure colSpan is correct even if columns is not defined
+            cell.colSpan = columns ? columns.length : 1;
+            cell.className = 'text-center text-gray-500 py-4';
+            cell.textContent = 'No data available.';
+            return;
+        }
+
+        dataArray.forEach(item => {
+            const row = tbody.insertRow();
+            columns.forEach(colConfig => {
+                const cell = row.insertCell();
+                renderTableCell(cell, item, colConfig, schemaName, entityId);
+            });
+        });
+    }
+
+    /**
+     * Creates an "Add" button for a detail table.
+     * Note: Relies on openDynamicFormModal.
+     * @param {string} title - The title of the section, used for the button text.
+     * @param {string} schemaName - The schema name to use for the add modal.
+     * @param {string} entityId - The parent entity's ID.
+     * @returns {HTMLButtonElement} The created button element.
+     */
+    function createAddButton(title, schemaName, entityId) {
+        const addButton = document.createElement('button');
+        addButton.className = 'btn-primary text-sm mt-2';
+        addButton.textContent = `Add ${title}`;
+        // Assumes global openDynamicFormModal exists
+        addButton.onclick = () => openDynamicFormModal(schemaName, entityId, null);
+        return addButton;
+    }
+
+
+    /**
+     * Creates a section for managing files associated with an entity.
+     * Note: Relies on createDetailTable, viewFileDetails, deleteFileFromModal, uploadFileToEntity.
+     * @param {Array<object>} files - The array of file objects.
+     * @param {string} entityType - The type of the parent entity ('provider' or 'facility').
+     * @param {string} entityId - The ID of the parent entity.
+     * @returns {HTMLElement} The created section div.
+     */
+    function createFileManagementSection(files, entityType, entityId) {
+        const section = createDetailTable({
+            title: 'Files',
+            dataArray: files,
+            entityId: entityId,
+            columns: [{
+                header: 'Path',
+                key: 'path',
+                render: (item) => {
+                    const fileName = item.path ? decodeURIComponent(item.path.substring(item.path.lastIndexOf('/') + 1)) : 'N/A';
+                    // Assumes global viewFileDetails exists
+                    return `<a href="#" onclick="event.preventDefault(); viewFileDetails('${item.id}')" class="text-blue-600 hover:underline">${fileName}</a>`;
+                }
+            },
+            {
+                header: 'Created At',
+                key: 'createdAt',
+                isDate: true
+            },
+            {
+                header: 'Size (KB)',
+                key: 'size',
+                render: (item) => item.size ? (item.size / 1024).toFixed(2) : 'N/A'
+            },
+            {
+                header: 'Actions',
+                key: 'id',
+                render: (item) => {
+                    // Assumes global deleteFileFromModal exists
+                    return `<button onclick="deleteFileFromModal('${item.id}', '${entityType}', '${entityId}')" class="btn-danger text-xs px-2 py-1">Delete</button>`;
+                }
+            }
+            ],
+            showAddButton: false // Explicitly disable the default "Add" button
+        });
+
+        // Add the file upload form
+        const uploadForm = document.createElement('div');
+        uploadForm.className = 'mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50';
+        // Assumes global uploadFileToEntity exists
+        uploadForm.innerHTML = `
+            <h4 class="text-lg font-semibold text-gray-700 mb-2">Upload New File</h4>
+            <input type="file" id="entityFileInput-${entityId}" class="mb-2">
+            <button onclick="uploadFileToEntity('${entityType}', '${entityId}')" class="btn-primary text-sm">Upload</button>
+            <div id="uploadStatus-${entityId}" class="text-sm text-gray-600 mt-2"></div>
+        `;
+        section.appendChild(uploadForm);
+
+        return section;
+    }
+
+    /**
+     * Creates a section for displaying and adding notes associated with an entity.
+     * Note: Relies on createDetailTable, addNoteToEntity.
+     * @param {Array<object>} notes - The array of note objects.
+     * @param {string} entityType - The type of the parent entity ('provider', 'facility', 'request').
+     * @param {string} entityId - The ID of the parent entity.
+     * @returns {HTMLElement} The created section div.
+     */
+    function createNotesSection(notes, entityType, entityId) {
+        const columns = [{
+            header: 'Note',
+            key: 'note',
+            render: (item) => `<p class="whitespace-pre-wrap">${item.note}</p>`
+        }, // Render with pre-wrap for line breaks
+        {
+            header: 'User',
+            key: 'userEmail'
+        }, {
+            header: 'Timestamp',
+            key: 'timestamp',
+            isDate: true,
+            render: (item) => new Date(item.timestamp).toLocaleString()
+        },
+        ];
+
+        const section = createDetailTable({
+            title: 'Notes',
+            dataArray: notes,
+            entityId: entityId,
+            columns: columns,
+            showAddButton: false // We will add a custom "add" form below
+        });
+
+        // Add the "Add Note" form
+        const addNoteForm = document.createElement('div');
+        addNoteForm.className = 'mt-4 p-4 border-t';
+        // Assumes global addNoteToEntity exists
+        addNoteForm.innerHTML = `
+            <h4 class="text-md font-semibold text-gray-700 mb-2">Add New Note</h4>
+            <textarea id="newNoteText-${entityId}" class="w-full text-sm rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Add a new note..."></textarea>
+            <button onclick="addNoteToEntity('${entityType}', '${entityId}')" class="btn-primary text-sm mt-2">Add Note</button>
+        `;
+        section.appendChild(addNoteForm);
+
+        return section;
+    }
+
+
+    /**
+     * Populates the checklist table within the credentialing request modal.
+     * Note: Relies on openDynamicFormModal, deleteChecklistItem.
+     * @param {Array<object>} items - The array of checklist item objects.
+     * @param {string} requestId - The ID of the parent credentialing request.
+     */
+    function populateChecklistTable(items, requestId) {
+        const tableBody = document.getElementById('requestChecklistTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = ''; // Clear previous content
+
+        if (!items || items.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-4">No checklist items found.</td></tr>';
+        } else {
+            items.forEach(item => {
+                const row = tableBody.insertRow();
+                row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+                row.insertCell().textContent = item.name;
+                row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+                row.insertCell().textContent = item.status;
+                row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+                row.insertCell().textContent = item.confirmedBy || 'N/A';
+                row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+                row.insertCell().textContent = item.confirmedAt ? new Date(item.confirmedAt).toLocaleDateString() : 'N/A';
+
+                const itemJson = encodeURIComponent(JSON.stringify(item));
+                const actionsCell = row.insertCell();
+                actionsCell.className = 'px-2 py-1 border-b border-gray-200';
+                // Assumes global openDynamicFormModal and deleteChecklistItem exist
+                actionsCell.innerHTML = `
+                    <button onclick="openDynamicFormModal('credentialingChecklistItem', '${requestId}', '${itemJson}')" class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                    <button onclick="deleteChecklistItem('${item.id}', '${requestId}')" class="text-red-600 hover:underline text-xs">Delete</button>
+                `;
+            });
+        }
+
+        // Add "Add Item" button at the bottom of the section
+        // Find the container holding the table (assuming it's wrapped)
+        const checklistSection = tableBody.closest('div.detail-section');
+        if (checklistSection) {
+             // Check if an add button already exists to avoid duplicates
+            const existingButton = checklistSection.querySelector('.add-checklist-item-btn');
+            if (!existingButton) {
+                const addButton = document.createElement('button');
+                addButton.className = 'btn-primary text-sm mt-2 add-checklist-item-btn'; // Add a class for easy finding
+                addButton.textContent = 'Add Checklist Item';
+                // Assumes global openDynamicFormModal exists
+                addButton.onclick = () => openDynamicFormModal('credentialingChecklistItem', requestId, null);
+                checklistSection.appendChild(addButton);
+            }
+        }
+    }
+
+    /**
+     * Renders dataset matches in the scan details modal table.
+     * Note: Relies on resolveMatch.
+     * @param {Array<object>} matches - The array of dataset match objects.
+     * @param {string} scanId - The ID of the parent scan.
+     */
+    function renderDatasetMatches(matches, scanId) {
+        const tableBody = document.getElementById('datasetMatchesTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = ''; // Clear previous content
+
+        if (!matches || matches.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-4">No matches found for this scan.</td></tr>';
+            return;
+        }
+
+        matches.forEach(match => {
+            const row = tableBody.insertRow();
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = match.type || 'N/A';
+             row.insertCell().className = 'px-2 py-1 border-b border-gray-200 whitespace-pre-wrap break-all';
+            row.insertCell().textContent = JSON.stringify(match.data || {}, null, 2); // Display match data
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = match.userActionNeeded ? 'Needs Review' : (match.userActionResolution || 'N/A');
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = match.userActionResolutionNote || 'N/A';
+
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'px-2 py-1 border-b border-gray-200';
+            if (match.userActionNeeded) {
+                 // Assumes global resolveMatch exists
+                actionsCell.innerHTML = `
+                    <button onclick="resolveMatch('${match.id}', '${scanId}', 'FalsePositive', true)" class="btn-secondary text-xs px-2 py-1 mr-2">False Positive</button>
+                    <button onclick="resolveMatch('${match.id}', '${scanId}', 'ConfirmedIssue', true)" class="btn-danger text-xs px-2 py-1">Confirmed Issue</button>
+                `;
+            } else {
+                actionsCell.textContent = 'Resolved';
+            }
+        });
+    }
+
+
+    /**
+     * Renders the list of providers in the main table.
+     * Note: Relies on renderTableHeaders, updateBulkActionUI, viewProviderDetails, editProvider, openDynamicFormModal.
+     * @param {Array<object>} providers - The array of provider objects.
+     */
+    function renderProviders(providers) {
+        // renderTableHeaders('provider'); // Assuming this is called once when the tab is loaded
+
+        const tableBody = document.getElementById('providerTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = ''; // Clear previous content
+
+        // The client-side filter for 'dueForRecred' is less efficient than backend filtering.
+        // A more robust solution would involve backend filtering.
+        let dataToRender = providers;
+        // if (state.providers.filter === 'dueForRecred') {
+        //     const ninetyDaysFromNow = new Date();
+        //     ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+        //     dataToRender = providers.filter(p => p.nextCredentialingDate && !p.deactivated && new Date(p.nextCredentialingDate) <= ninetyDaysFromNow);
+        // }
+
+        if (!dataToRender || dataToRender.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-500 py-4">No providers found.</td></tr>';
+            return;
+        }
+
+        dataToRender.forEach(provider => {
+            const row = tableBody.insertRow();
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            // Assumes a global updateBulkActionUI function exists
+            row.insertCell().innerHTML = `<input type="checkbox" class="provider-checkbox" value="${provider.id}" onchange="updateBulkActionUI()">`;
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.id.substring(0, 8) + '...';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.firstName;
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.lastName;
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.npi || 'N/A';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.nextCredentialingDate ? new Date(provider.nextCredentialingDate).toLocaleDateString() : 'N/A';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = provider.credentialingStatus;
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200 text-center';
+            row.insertCell().innerHTML = provider.deactivated ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Yes</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">No</span>';
+
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'px-2 py-1 border-b border-gray-200 whitespace-nowrap';
+             // Assumes global viewProviderDetails, editProvider, and openDynamicFormModal exist
+            actionsCell.innerHTML = `
+                <button onclick="viewProviderDetails('${provider.id}')" class="text-green-600 hover:underline text-xs mr-2">View Profile</button>
+                <button onclick='editProvider(${JSON.stringify(provider)})' class='text-blue-500 hover:underline text-xs mr-2'>Edit Row</button>
+                <button onclick="openDynamicFormModal('providerQuickNote', '${provider.id}', null)" class="text-purple-600 hover:underline text-xs">Add Note</button>
+            `;
+        });
+        updateBulkActionUI(); // Assuming this function updates the bulk action button state
+    }
+
+    /**
+     * Renders the list of facilities in the main table.
+     * Note: Relies on renderTableHeaders, viewFacilityDetails, editFacility, openDynamicFormModal.
+     * @param {Array<object>} facilities - The array of facility objects.
+     */
+    function renderFacilities(facilities) {
+        // renderTableHeaders('facility'); // Assuming this is called once when the tab is loaded
+
+        const tableBody = document.getElementById('facilitiesTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = ''; // Clear previous content
+
+        if (!facilities || facilities.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-4">No facilities found.</td></tr>';
+            return;
+        }
+
+        facilities.forEach(facility => {
+            const row = tableBody.insertRow();
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = facility.id.substring(0, 8) + '...';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = facility.name;
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = facility.city || 'N/A';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200';
+            row.insertCell().textContent = facility.state || 'N/A';
+            row.insertCell().className = 'px-2 py-1 border-b border-gray-200 text-center';
+            row.insertCell().innerHTML = facility.deactivated ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Yes</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">No</span>';
+
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'px-2 py-1 border-b border-gray-200 whitespace-nowrap';
+            // Assumes global viewFacilityDetails, editFacility, and openDynamicFormModal exist
+            actionsCell.innerHTML = `
+                <button onclick="viewFacilityDetails('${facility.id}')" class="text-green-600 hover:underline text-xs mr-2">View Profile</button>
+                <button onclick='editFacility(${JSON.stringify(facility)})' class='text-blue-500 hover:underline text-xs mr-2'>Edit</button>
+                <button onclick="openDynamicFormModal('facilityQuickNote', '${facility.id}', null)"</button>
+            `;
+        });
+    }

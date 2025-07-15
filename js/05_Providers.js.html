@@ -1,0 +1,580 @@
+<script>
+/**
+ * @fileoverview
+ * This file contains all client-side JavaScript functions for managing Providers.
+ */
+
+let providerDataTable = null;
+let allProviders = []; // Cache for all providers
+let currentProviderPage = 1;
+const providersPerPage = 15;
+let selectedProviderIds = new Set();
+
+/**
+ * Clears the provider form.
+ */
+function clearProviderForm() {
+    document.getElementById('providerId').value = '';
+    document.getElementById('firstName').value = '';
+    document.getElementById('lastName').value = '';
+    document.getElementById('npi').value = '';
+    document.getElementById('nextCredentialingDate').value = '';
+    document.getElementById('credentialingStatus').value = 'Data Collection';
+    document.getElementById('deactivated').checked = false;
+}
+
+/**
+ * Populates the provider form with data from a selected row.
+ * @param {string} providerId The ID of the provider to load.
+ */
+function loadProviderToForm(providerId) {
+    const provider = allProviders.find(p => p.id === providerId);
+    if (provider) {
+        document.getElementById('providerId').value = provider.id;
+        document.getElementById('firstName').value = provider.firstName;
+        document.getElementById('lastName').value = provider.lastName;
+        document.getElementById('npi').value = provider.npi;
+        document.getElementById('nextCredentialingDate').value = provider.nextCredentialingDate;
+        document.getElementById('credentialingStatus').value = provider.credentialingStatus;
+        document.getElementById('deactivated').checked = provider.deactivated;
+    }
+}
+
+/**
+ * Adds a new provider.
+ */
+function addProvider() {
+    const firstName = document.getElementById('firstName').value;
+    const lastName = document.getElementById('lastName').value;
+    const npi = document.getElementById('npi').value;
+    const nextCredentialingDate = document.getElementById('nextCredentialingDate').value;
+    const credentialingStatus = document.getElementById('credentialingStatus').value;
+    const deactivated = document.getElementById('deactivated').checked;
+
+    if (!firstName || !lastName) {
+        showMessage('Error: First name and last name are required.', 'error');
+        return;
+    }
+
+    google.script.run
+        .withSuccessHandler(function(response) {
+            if (response.success) {
+                showMessage(response.message, 'success');
+                clearProviderForm();
+                loadProviders(currentProviderPage); // Reload the current page
+            } else {
+                showMessage('Error adding provider: ' + response.message, 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showMessage('Server error adding provider: ' + error.message, 'error');
+        })
+        .createProvider({
+            firstName: firstName,
+            lastName: lastName,
+            npi: npi,
+            nextCredentialingDate: nextCredentialingDate,
+            credentialingStatus: credentialingStatus,
+            deactivated: deactivated
+        });
+}
+
+/**
+ * Updates an existing provider.
+ */
+function updateProvider() {
+    const providerId = document.getElementById('providerId').value;
+    const firstName = document.getElementById('firstName').value;
+    const lastName = document.getElementById('lastName').value;
+    const npi = document.getElementById('npi').value;
+    const nextCredentialingDate = document.getElementById('nextCredentialingDate').value;
+    const credentialingStatus = document.getElementById('credentialingStatus').value;
+    const deactivated = document.getElementById('deactivated').checked;
+
+    if (!providerId) {
+        showMessage('Error: Select a provider to update.', 'error');
+        return;
+    }
+    if (!firstName || !lastName) {
+        showMessage('Error: First name and last name are required.', 'error');
+        return;
+    }
+
+    google.script.run
+        .withSuccessHandler(function(response) {
+            if (response.success) {
+                showMessage(response.message, 'success');
+                clearProviderForm();
+                loadProviders(currentProviderPage); // Reload the current page
+            } else {
+                showMessage('Error updating provider: ' + response.message, 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showMessage('Server error updating provider: ' + error.message, 'error');
+        })
+        .updateProvider({
+            id: providerId,
+            firstName: firstName,
+            lastName: lastName,
+            npi: npi,
+            nextCredentialingDate: nextCredentialingDate,
+            credentialingStatus: credentialingStatus,
+            deactivated: deactivated
+        });
+}
+
+/**
+ * Deletes a provider.
+ */
+function deleteProvider() {
+    const providerId = document.getElementById('providerId').value;
+    if (!providerId) {
+        showMessage('Error: Select a provider to delete.', 'error');
+        return;
+    }
+
+    showConfirmModal('Confirm Delete', 'Are you sure you want to delete this provider and all associated data?', function() {
+         google.script.run
+            .withSuccessHandler(function(response) {
+                if (response.success) {
+                    showMessage(response.message, 'success');
+                    clearProviderForm();
+                    loadProviders(currentProviderPage); // Reload the current page
+                } else {
+                    showMessage('Error deleting provider: ' + response.message, 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                showMessage('Server error deleting provider: ' + error.message, 'error');
+            })
+            .deleteProvider(providerId);
+    });
+}
+
+
+/**
+ * Loads providers into the table with pagination and search.
+ * @param {number} page The page number to load.
+ */
+function loadProviders(page = 1) {
+    currentProviderPage = page;
+    const searchTerm = document.getElementById('providerSearch').value;
+    const options = {
+        page: page,
+        pageSize: providersPerPage,
+        searchTerm: searchTerm,
+        sortBy: 'lastName', // Default sort
+        sortOrder: 'asc' // Default order
+    };
+
+    showLoading(true);
+    google.script.run
+        .withSuccessHandler(function(response) {
+            showLoading(false);
+            if (response.success) {
+                allProviders = response.data; // Cache the current page's data
+                renderProviderTable(allProviders);
+                renderPagination('providerPagination', currentProviderPage, providersPerPage, response.totalRecords, loadProviders);
+                // Reset selection and bulk controls after loading new page
+                selectedProviderIds.clear();
+                updateProviderSelectionCount();
+                document.getElementById('bulkUpdateStatus').value = ''; // Reset bulk status dropdown
+            } else {
+                showMessage('Error loading providers: ' + response.message, 'error');
+                renderProviderTable([]); // Clear table on error
+                renderPagination('providerPagination', 1, providersPerPage, 0, loadProviders); // Clear pagination
+            }
+        })
+        .withFailureHandler(function(error) {
+            showLoading(false);
+            showMessage('Server error loading providers: ' + error.message, 'error');
+            renderProviderTable([]); // Clear table on error
+            renderPagination('providerPagination', 1, providersPerPage, 0, loadProviders); // Clear pagination
+        })
+        .getProviders(options);
+}
+
+/**
+ * Renders the provider data in the table.
+ * @param {Array<object>} providers The array of provider objects to display.
+ */
+function renderProviderTable(providers) {
+    const tableBody = document.getElementById('providerTableBody');
+    tableBody.innerHTML = ''; // Clear existing rows
+    const tableHead = document.getElementById('providerTableHead');
+     tableHead.innerHTML = `<tr><th><input type="checkbox" onchange="toggleSelectAll(this, 'providerTableBody', 'provider')"></th><th>ID</th><th>First Name</th><th>Last Name</th><th>NPI</th><th>Status</th><th>Deactivated</th><th>Actions</th></tr>`;
+
+
+    if (providers.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500">No providers found.</td></tr>';
+        return;
+    }
+
+    providers.forEach(provider => {
+        const row = tableBody.insertRow();
+         row.innerHTML = `
+            <td><input type="checkbox" onchange="toggleIndividualSelection(this, 'provider', '${provider.id}')" ${selectedProviderIds.has(provider.id) ? 'checked' : ''}></td>
+            <td>${provider.id}</td>
+            <td>${provider.firstName}</td>
+            <td>${provider.lastName}</td>
+            <td>${provider.npi || 'N/A'}</td>
+            <td>${provider.credentialingStatus || 'N/A'}</td>
+            <td>${provider.deactivated ? 'Yes' : 'No'}</td>
+            <td class="whitespace-nowrap">
+                <button onclick="loadProviderToForm('${provider.id}')" class="btn-secondary text-xs px-2 py-1">Edit</button>
+                <button onclick="viewProviderDetails('${provider.id}')" class="btn-secondary text-xs px-2 py-1 ml-1">View Profile</button>
+            </td>
+        `;
+    });
+}
+
+/**
+ * Handles search input for providers.
+ * @param {string} entityType - 'provider' or 'facility'
+ */
+function handleSearch(entityType) {
+    if (entityType === 'provider') {
+        // Debounce the search input
+        clearTimeout(state.providerSearchTimer);
+        state.providerSearchTimer = setTimeout(() => {
+            loadProviders(1);
+        }, 300); // 300ms delay
+    } else if (entityType === 'facility') {
+        clearTimeout(state.facilitySearchTimer);
+        state.facilitySearchTimer = setTimeout(() => {
+            loadFacilities(1);
+        }, 300);
+    } else if (entityType === 'requests') {
+        clearTimeout(state.requestSearchTimer);
+        state.requestSearchTimer = setTimeout(() => {
+            loadCredentialingRequests(1);
+        }, 300);
+    } else if (entityType === 'auditLog') {
+         clearTimeout(state.auditLogSearchTimer);
+         state.auditLogSearchTimer = setTimeout(() => {
+             loadEventLogEntries(1);
+         }, 300);
+    } else if (entityType === 'datasetScans') {
+         clearTimeout(state.datasetScanSearchTimer);
+         state.datasetScanSearchTimer = setTimeout(() => {
+             loadDatasetScans(1);
+         }, 300);
+    } else if (entityType === 'profileImports') {
+         clearTimeout(state.profileImportSearchTimer);
+         state.profileImportSearchTimer = setTimeout(() => {
+             loadProfileImports(1);
+         }, 300);
+    } else if (entityType === 'files') {
+        clearTimeout(state.fileSearchTimer);
+        state.fileSearchTimer = setTimeout(() => {
+            loadFiles(1);
+        }, 300);
+    } else if (entityType === 'alerts') {
+         clearTimeout(state.alertSearchTimer);
+         state.alertSearchTimer = setTimeout(() => {
+             loadAlerts(1);
+         }, 300);
+    } else if (entityType === 'notes') {
+        clearTimeout(state.allNotesSearchTimer);
+        state.allNotesSearchTimer = setTimeout(() => {
+            loadAllNotes(1);
+        }, 300);
+    } else if (entityType === 'licenses') {
+        clearTimeout(state.licenseSearchTimer);
+        state.licenseSearchTimer = setTimeout(() => {
+            loadProviderLicenses(1);
+        }, 300);
+    }
+
+}
+
+/**
+ * Toggles selection of an individual item for bulk actions.
+ * @param {HTMLInputElement} checkbox The checkbox element.
+ * @param {string} entityType 'provider' or 'file'
+ * @param {string} entityId The ID of the entity.
+ */
+function toggleIndividualSelection(checkbox, entityType, entityId) {
+    let selectedSet, countSpanId, controlsId;
+    if (entityType === 'provider') {
+        selectedSet = selectedProviderIds;
+        countSpanId = 'providerSelectionCount';
+        controlsId = 'providerBulkActionControls';
+    } else if (entityType === 'file') {
+        selectedSet = selectedFileIds;
+        countSpanId = 'fileSelectionCount';
+        controlsId = 'fileBulkActionControls';
+    } else {
+        console.error("Unknown entity type for selection:", entityType);
+        return;
+    }
+
+    if (checkbox.checked) {
+        selectedSet.add(entityId);
+    } else {
+        selectedSet.delete(entityId);
+        // Uncheck the "Select All" checkbox if any individual checkbox is unchecked
+        const selectAllCheckbox = document.querySelector(`#${entityType}TableHead input[type="checkbox"]`);
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+        }
+    }
+    updateSelectionCount(countSpanId, selectedSet.size);
+    document.getElementById(controlsId).classList.toggle('hidden', selectedSet.size === 0);
+}
+
+/**
+ * Toggles selection of all items on the current page for bulk actions.
+ * @param {HTMLInputElement} checkbox The "Select All" checkbox element.
+ * @param {string} tableBodyId The ID of the table body element.
+ * @param {string} entityType 'provider' or 'file'
+ */
+function toggleSelectAll(checkbox, tableBodyId, entityType) {
+    const isChecked = checkbox.checked;
+    const tableBody = document.getElementById(tableBodyId);
+    const checkboxes = tableBody.querySelectorAll('input[type="checkbox"]');
+
+    let selectedSet, countSpanId, controlsId;
+    if (entityType === 'provider') {
+        selectedSet = selectedProviderIds;
+        countSpanId = 'providerSelectionCount';
+        controlsId = 'providerBulkActionControls';
+    } else if (entityType === 'file') {
+        selectedSet = selectedFileIds;
+        countSpanId = 'fileSelectionCount';
+        controlsId = 'fileBulkActionControls';
+    } else {
+         console.error("Unknown entity type for select all:", entityType);
+         return;
+    }
+
+
+    checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+        const entityId = cb.closest('tr').children[1].innerText; // Assuming ID is the second column
+        if (isChecked) {
+            selectedSet.add(entityId);
+        } else {
+            selectedSet.delete(entityId);
+        }
+    });
+    updateSelectionCount(countSpanId, selectedSet.size);
+    document.getElementById(controlsId).classList.toggle('hidden', selectedSet.size === 0);
+}
+
+/**
+ * Updates the displayed count of selected items.
+ * @param {string} countSpanId The ID of the span element displaying the count.
+ * @param {number} count The number of selected items.
+ */
+function updateSelectionCount(countSpanId, count) {
+    document.getElementById(countSpanId).innerText = `${count} selected`;
+}
+
+/**
+ * Updates the displayed count of selected providers.
+ */
+function updateProviderSelectionCount() {
+    updateSelectionCount('providerSelectionCount', selectedProviderIds.size);
+    document.getElementById('providerBulkActionControls').classList.toggle('hidden', selectedProviderIds.size === 0);
+}
+
+/**
+ * Handles bulk update for providers.
+ */
+function bulkUpdateProviders() {
+    const newStatus = document.getElementById('bulkUpdateStatus').value;
+    const providerIds = Array.from(selectedProviderIds);
+
+    if (providerIds.length === 0) {
+        showMessage('No providers selected for bulk update.', 'warning');
+        return;
+    }
+    if (!newStatus) {
+        showMessage('Please select a status for the bulk update.', 'warning');
+        return;
+    }
+
+    showConfirmModal('Confirm Bulk Update', `Are you sure you want to set the status to "${newStatus}" for ${providerIds.length} selected providers?`, function() {
+         showLoading(true);
+         google.script.run
+            .withSuccessHandler(function(response) {
+                showLoading(false);
+                if (response.success) {
+                    showMessage(response.message, 'success');
+                    selectedProviderIds.clear(); // Clear selection after update
+                    updateProviderSelectionCount();
+                    document.getElementById('bulkUpdateStatus').value = ''; // Reset dropdown
+                    loadProviders(currentProviderPage); // Reload the current page
+                } else {
+                    showMessage('Error performing bulk update: ' + response.message, 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                showLoading(false);
+                showMessage('Server error during bulk update: ' + error.message, 'error');
+            })
+            .bulkUpdateProvidersStatus(providerIds, newStatus);
+    });
+}
+
+/**
+ * Opens the modal to view a provider's full profile.
+ * @param {string} providerId The ID of the provider.
+ */
+function viewProviderDetails(providerId) {
+    showLoading(true);
+    google.script.run
+        .withSuccessHandler(function(response) {
+            showLoading(false);
+            if (response.success) {
+                renderProviderDetailsModal(response.data);
+                openModal('providerDetailsModal');
+            } else {
+                showMessage('Error loading provider details: ' + response.message, 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showLoading(false);
+            showMessage('Server error loading provider details: ' + error.message, 'error');
+        })
+        .getProviderDetails(providerId);
+}
+
+/**
+ * Renders the content of the provider details modal.
+ * @param {object} provider The provider object with all related data.
+ */
+function renderProviderDetailsModal(provider) {
+    document.getElementById('modalProviderName').innerText = `${provider.firstName} ${provider.lastName}`;
+    const contentDiv = document.getElementById('providerDetailsContent');
+    contentDiv.innerHTML = ''; // Clear previous content
+
+    let html = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div><strong>ID:</strong> ${provider.id}</div>
+            <div><strong>NPI:</strong> ${provider.npi || 'N/A'}</div>
+            <div><strong>Credentialing Status:</strong> ${provider.credentialingStatus || 'N/A'}</div>
+            <div><strong>Next Credentialing Date:</strong> ${provider.nextCredentialingDate || 'N/A'}</div>
+            <div><strong>Deactivated:</strong> ${provider.deactivated ? 'Yes' : 'No'}</div>
+        </div>
+    `;
+
+    // Sections for related data
+    html += renderSection('Aliases', provider.aliases, ['firstName', 'lastName'], provider.id, 'aliases');
+    html += renderSection('Addresses', provider.addresses, ['type', 'addressLine1', 'city', 'state', 'zipCode'], provider.id, 'addresses');
+    html += renderSection('Emails', provider.emails, ['type', 'email'], provider.id, 'emails');
+    html += renderSection('Licenses', provider.licenses, ['licenseNumber', 'state', 'currentVerificationStatus', 'nonVerifiedExpirationDate'], provider.id, 'licenses', renderLicenseActions); // Add renderLicenseActions
+    html += renderSection('Education', provider.education, ['schoolName', 'degree', 'endDate'], provider.id, 'education');
+    html += renderSection('Training', provider.training, ['institutionName', 'speciality', 'endDate'], provider.id, 'training');
+    html += renderSection('Work History', provider.workHistory, ['name', 'jobTitle', 'isCurrentEmployer', 'startDate', 'endDate'], provider.id, 'workHistory');
+    html += renderSection('Board Certifications', provider.boardCertifications, ['type', 'specialty', 'expirationDate'], provider.id, 'boardCertifications');
+    html += renderSection('DEA Registrations', provider.deaRegistrations, ['registrationNumber', 'lastUpdatedAt'], provider.id, 'deaRegistrations');
+    html += renderSection('Certificates', provider.certificates, ['type', 'certificateNumber', 'expirationDate'], provider.id, 'certificates');
+    html += renderSection('CAQH Info', provider.caqhInfo, ['caqhId', 'lastUpdatedAt'], provider.id, 'caqhInfo');
+    html += renderSection('Liability Insurance', provider.liabilityInsurances, ['name', 'currentExpirationDate', 'policyNumber'], provider.id, 'liabilityInsurances');
+    html += renderSection('Enrollments', provider.enrollments, ['groupName', 'payerName', 'payerPlanName', 'enrollmentStatus', 'effectiveDate'], provider.id, 'enrollments'); // Added enrollments
+    html += renderSection('Files', provider.files, ['path', 'createdAt', 'createdBy'], provider.id, 'files', renderFileActions); // Added files with actions
+    html += renderSection('Notes', provider.notes, ['note', 'timestamp', 'userEmail'], provider.id, 'notes', renderNoteActions); // Added notes with actions
+    html += renderSection('Profile Imports', provider.imports, ['source', 'status', 'started', 'completed'], provider.id, 'profileImports', renderImportActions); // Added imports with actions
+    html += renderSection('Dataset Scans', provider.scans, ['type', 'status', 'started', 'completed'], provider.id, 'datasetScans', renderScanActions); // Added scans with actions
+
+    contentDiv.innerHTML = html;
+
+    // Add event listeners for Add/Edit/Delete buttons in sections
+    contentDiv.querySelectorAll('.btn-add-sub-entity').forEach(button => {
+        button.onclick = () => openDynamicFormModal(button.dataset.entityType, button.dataset.parentId);
+    });
+    // Attach event listeners for 'Edit' buttons dynamically if needed, using event delegation or specific functions
+
+    const footerDiv = document.getElementById('providerDetailsFooter');
+    footerDiv.innerHTML = `<button onclick="closeModal('providerDetailsModal')" class="btn-secondary">Close</button>`;
+}
+
+/**
+ * Renders the actions column for Licenses in the details modal.
+ * @param {object} license The license object.
+ * @param {string} parentId The ID of the parent entity (provider).
+ * @returns {string} HTML string for the actions buttons.
+ */
+function renderLicenseActions(license, parentId) {
+    return `<button onclick="openLicenseVerificationsModal('${parentId}', '${license.id}', '${license.licenseNumber}', '${document.getElementById('modalProviderName').innerText}')" class="btn-secondary text-xs px-2 py-1">View Verifications</button>`;
+}
+
+// Helper for rendering file actions in details modal
+function renderFileActions(file, parentId) {
+     const fileUrl = file.path;
+     const filename = fileUrl ? fileUrl.substring(fileUrl.lastIndexOf('/') + 1) : 'Unknown File';
+     return `
+         <button onclick="viewFileDetails('${file.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
+     `;
+ }
+
+// Helper for rendering note actions in details modal
+function renderNoteActions(note, parentId) {
+     return `
+         <button onclick="openEditNoteModal('${note.id}', '${note.note}', '${note.timestamp}', '${note.userEmail}')" class="btn-secondary text-xs px-2 py-1">Edit</button>
+     `;
+ }
+
+// Helper for rendering import actions in details modal
+function renderImportActions(importJob, parentId) {
+    return `
+        <button onclick="openProfileImportDetailsModal('${importJob.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
+    `;
+}
+
+// Helper for rendering scan actions in details modal
+function renderScanActions(scan, parentId) {
+    return `
+        <button onclick="openScanDetailsModal('${scan.id}')" class="btn-secondary text-xs px-2 py-1">View Details</button>
+    `;
+}
+
+/**
+ * Handles the response from the generic createSubEntity function.
+ * Reloads the parent's details modal after successful creation.
+ * @param {string} entityType The type of entity created.
+ * @param {string} parentId The ID of the parent entity.
+ * @param {object} response The success/error response.
+ */
+function handleCreateSubEntityResponse(entityType, parentId, response) {
+    showLoading(false);
+    if (response.success) {
+        showMessage(`${response.message}`, 'success');
+        closeModal('dynamicFormModal');
+        // Reload the parent details modal (Provider or Facility)
+        if (entityType.startsWith('provider')) {
+            viewProviderDetails(parentId);
+        } else if (entityType.startsWith('facility')) {
+            viewFacilityDetails(parentId);
+        }
+    } else {
+        showMessage(`Error adding ${entityType}: ${response.message}`, 'error');
+    }
+}
+
+/**
+ * Handles the response from the generic deleteSubEntity function.
+ * Reloads the parent's details modal after successful deletion.
+ * @param {string} entityType The type of entity deleted.
+ * @param {string} parentId The ID of the parent entity.
+ * @param {object} response The success/error response.
+ */
+function handleDeleteSubEntityResponse(entityType, parentId, response) {
+    showLoading(false);
+    if (response.success) {
+        showMessage(response.message, 'success');
+        // Reload the parent details modal (Provider or Facility)
+        if (entityType.startsWith('provider')) {
+            viewProviderDetails(parentId);
+        } else if (entityType.startsWith('facility')) {
+            viewFacilityDetails(parentId);
+        }
+    } else {
+        showMessage(`Error deleting ${entityType}: ${response.message}`, 'error');
+    }
+}
+
+</script>

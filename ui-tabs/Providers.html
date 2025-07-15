@@ -1,0 +1,64 @@
+<!-- Providers Tab -->
+<div id="providers" class="tab-content">
+  <h2 class="text-2xl font-semibold text-gray-700 mb-4">Provider Management</h2>
+  <div class="mb-8 p-6 border border-gray-200 rounded-lg">
+    <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Provider</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div><label for="providerId" class="block text-sm font-medium text-gray-700 mb-1">Provider ID (for
+          Update/Delete):</label><input type="text" id="providerId" placeholder="Auto-generated for new"
+          class="rounded-lg bg-gray-100" readonly></div>
+      <div><label for="firstName" class="block text-sm font-medium text-gray-700 mb-1">First Name:</label><input
+          type="text" id="firstName" placeholder="John" required class="rounded-lg"></div>
+      <div><label for="lastName" class="block text-sm font-medium text-gray-700 mb-1">Last Name:</label><input
+          type="text" id="lastName" placeholder="Doe" required class="rounded-lg"></div>
+      <div><label for="npi" class="block text-sm font-medium text-gray-700 mb-1">NPI (Optional):</label><input
+          type="text" id="npi" placeholder="1234567890" class="rounded-lg"></div>
+      <div><label for="nextCredentialingDate" class="block text-sm font-medium text-gray-700 mb-1">Next Credentialing
+          Date (Optional):</label><input type="date" id="nextCredentialingDate" class="rounded-lg"></div>
+      <div><label for="credentialingStatus" class="block text-sm font-medium text-gray-700 mb-1">Credentialing
+          Status:</label><select id="credentialingStatus" class="rounded-lg">
+          <option value="Data Collection">Data Collection</option>
+          <option value="Active">Active</option>
+          <option value="Needs Review">Needs Review</option>
+          <option value="Expired">Expired</option>
+        </select></div>
+      <div class="flex items-center"><input type="checkbox" id="deactivated"
+          class="rounded-md h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"><label for="deactivated"
+          class="ml-2 block text-sm font-medium text-gray-700">Deactivated</label></div>
+    </div>
+    <div class="flex flex-wrap gap-3"><button onclick="addProvider()" class="btn-primary flex-grow">Create New
+        Provider</button><button onclick="updateProvider()" class="btn-secondary flex-grow">Update
+        Provider</button><button onclick="deleteProvider()" class="btn-danger flex-grow">Delete Provider</button><button
+        onclick="clearForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+  </div>
+  <div class="p-6 border border-gray-200 rounded-lg">
+    <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Providers</h3>
+    <div class="flex items-center gap-4 mb-4">
+      <div class="flex-grow"><label for="providerSearch" class="block text-sm font-medium text-gray-700 mb-1">Search
+          Providers:</label><input type="text" id="providerSearch" onkeyup="handleSearch('provider')"
+          placeholder="Search by Name, NPI, or ID..." class="rounded-lg w-full"></div>
+      <button id="clearProviderFilterBtn" onclick="clearDashboardFilter('providers')" class="btn-secondary mt-6"
+        style="display: none;">Clear Filter</button>
+    </div>
+    <div id="providerBulkActionControls"
+      class="hidden my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-4"><span
+        id="providerSelectionCount" class="font-semibold text-blue-800">0 selected</span><select id="bulkUpdateStatus"
+        class="rounded-lg">
+        <option value="">-- Select New Status --</option>
+        <option value="Data Collection">Data Collection</option>
+        <option value="Active">Active</option>
+        <option value="Needs Review">Needs Review</option>
+        <option value="Expired">Expired</option>
+      </select><button onclick="bulkUpdateProviders()" class="btn-primary">Apply Status</button></div>
+    <div class="flex gap-2"><button onclick="loadProviders(1)" class="btn-primary mb-4 w-full md:w-auto">Load/Refresh
+        Providers</button><button onclick="exportListToCsv('provider')"
+        class="btn-secondary mb-4 w-full md:w-auto">Export to CSV</button></div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full">
+        <thead id="providerTableHead"></thead>
+        <tbody id="providerTableBody"></tbody>
+      </table>
+      <div id="providerPagination" class="mt-4 flex justify-between items-center"></div>
+    </div>
+  </div>
+</div>

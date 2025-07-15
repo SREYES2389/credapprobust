@@ -1,0 +1,120 @@
+<script>
+    // =================================================================
+    // 4. UI & GENERAL HELPER FUNCTIONS
+    // =================================================================
+
+    /**
+     * Shows a specific tab and hides others, updating the active link style.
+     * @param {string} tabId - The ID of the tab content element to show.
+     */
+    function showTab(tabId) {
+        // Hide all tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+
+        // Deactivate all tab links
+        document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+
+        // Show the target tab content
+        const tabContent = document.getElementById(tabId);
+        if (tabContent) {
+            tabContent.style.display = 'block';
+        }
+
+        // Activate the clicked tab link
+        // This finds the button whose onclick attribute contains the tabId. A bit brittle, but works for this setup.
+        const clickedTabLink = Array.from(document.querySelectorAll('.tab-link')).find(link => link.getAttribute('onclick').includes(`'${tabId}'`));
+        if (clickedTabLink) {
+            clickedTabLink.classList.add('active');
+        }
+    }
+
+    /**
+     * Displays a temporary message to the user at the top of the page.
+     * @param {string} message - The message to display.
+     * @param {boolean} [isError=false] - If true, displays an error-styled box.
+     */
+    function showMessage(message, isError = false) {
+        const box = isError ? document.getElementById('errorBox') : document.getElementById('messageBox');
+        if (box) {
+            box.textContent = message;
+            box.style.display = 'block';
+            setTimeout(() => { box.style.display = 'none'; }, 5000);
+        } else {
+            console.error(`Message Box (isError: ${isError}) not found. Message: ${message}`);
+        }
+    }
+
+    /**
+     * Opens a modal dialog by its ID.
+     * @param {string} modalId - The ID of the modal element to display.
+     */
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+
+    /**
+     * Closes a modal dialog by its ID and can perform optional cleanup.
+     * @param {string} modalId - The ID of the modal element to hide.
+     */
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'none';
+            // Example of specific cleanup logic that could be added here
+            if (modalId === 'singleLicenseVerificationModal') {
+                const resolveSection = document.getElementById('resolveVerificationSection');
+                if (resolveSection) resolveSection.classList.add('hidden');
+            }
+        }
+    }
+
+    /**
+     * Shows a reusable confirmation modal.
+     * @param {string} title - The title of the confirmation dialog.
+     * @param {string} message - The message to display to the user.
+     * @param {Function} onConfirmCallback - The function to execute if the user confirms.
+     * @param {string} [confirmButtonText='Confirm'] - Text for the confirm button.
+     * @param {string} [confirmButtonClass='btn-danger'] - CSS class for the confirm button.
+     */
+    function showConfirmModal(title, message, onConfirmCallback, confirmButtonText = 'Confirm', confirmButtonClass = 'btn-danger') {
+        document.getElementById('customConfirmModalTitle').textContent = title;
+        document.getElementById('customConfirmModalMessage').textContent = message;
+
+        const confirmBtn = document.getElementById('customConfirmModalConfirmBtn');
+        confirmBtn.textContent = confirmButtonText;
+        confirmBtn.className = confirmButtonClass; // Reset classes and apply the new one
+
+        // To prevent multiple listeners from stacking up, we clone and replace the button
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', () => {
+            closeModal('customConfirmModal');
+            onConfirmCallback();
+        });
+
+        openModal('customConfirmModal');
+    }
+
+    /**
+     * Returns a generic success handler function for API calls that save data.
+     * @param {Function} [refreshFunc] - An optional function to run on success (e.g., to reload a data table).
+     * @param {Function} [clearFunc] - An optional function to run on success (e.g., to clear a form).
+     * @returns {Function} A success handler function that takes a response object.
+     */
+    function handleSaveResponse(refreshFunc, clearFunc) {
+        return function (res) {
+            if (res.success) {
+                showMessage(res.message || 'Operation successful.', false);
+                if (refreshFunc) refreshFunc();
+                if (clearFunc) clearFunc();
+            } else {
+                showMessage(res.message || 'An unknown error occurred.', true);
+            }
+        }
+    }
+
+</script>

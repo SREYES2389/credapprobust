@@ -1,0 +1,614 @@
+<script>
+/**
+ * @fileoverview
+ * This file contains all client-side JavaScript functions related to the Facilities tab
+ * and facility-specific operations like viewing details and managing sub-entities.
+ */
+
+// --- State Management ---
+// State specific to the Facilities tab
+const facilityState = {
+  currentPage: 1,
+  pageSize: 15,
+  searchTerm: '',
+  sortBy: 'name', // Default sort
+  sortOrder: 'asc', // Default order
+  selectedFacilityId: null, // For modals or related data loading
+  providerNames: {}, // Cache provider names for display
+  facilityNames: {} // Cache facility names for display
+};
+
+
+// --- Core UI Functions ---
+
+/**
+ * Loads and displays a list of facilities in the facilities table.
+ * Supports pagination and search filtering.
+ * @param {number} [page=1] The page number to load.
+ */
+function loadFacilities(page = 1) {
+  facilityState.currentPage = page;
+  facilityState.searchTerm = document.getElementById('facilitySearch').value;
+
+  showLoading();
+  google.script.run
+    .withSuccessHandler(displayFacilities)
+    .withFailureHandler(showError)
+    .getFacilities({
+      page: facilityState.currentPage,
+      pageSize: facilityState.pageSize,
+      searchTerm: facilityState.searchTerm,
+      sortBy: facilityState.sortBy,
+      sortOrder: facilityState.sortOrder
+    });
+}
+
+/**
+ * Displays the fetched facilities in the facilities table.
+ * @param {object} response The response object from the server-side function.
+ */
+function displayFacilities(response) {
+  hideLoading();
+  if (!response.success) {
+    showError(response.message);
+    return;
+  }
+
+  const tableBody = document.getElementById('facilitiesTableBody');
+  const paginationDiv = document.getElementById('facilityPagination');
+  tableBody.innerHTML = '';
+
+  if (response.data.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500">No facilities found.</td></tr>';
+    paginationDiv.innerHTML = '';
+    return;
+  }
+
+  response.data.forEach(facility => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td title="${facility.id}">${facility.id.substring(0, 6)}...</td>
+      <td>${escapeHTML(facility.name)}</td>
+      <td>${escapeHTML(facility.city || '')}</td>
+      <td>${escapeHTML(facility.state || '')}</td>
+      <td>${facility.deactivated ? 'Yes' : 'No'}</td>
+      <td class="whitespace-nowrap">
+        <button onclick="editFacility('${facility.id}')" class="btn-secondary text-xs px-2 py-1">Edit</button>
+        <button onclick="showFacilityDetailsModal('${facility.id}')" class="btn-secondary text-xs px-2 py-1 ml-1">View Details</button>
+      </td>
+    `;
+    tableBody.appendChild(row);
+  });
+
+  renderPagination(paginationDiv, response.totalRecords, facilityState.currentPage, facilityState.pageSize, loadFacilities);
+
+  // Update cached facility names for dropdowns/lookups
+  response.data.forEach(f => { facilityState.facilityNames[f.id] = f.name; });
+}
+
+
+/**
+ * Populates the facility form with data for editing a specific facility.
+ * @param {string} facilityId The ID of the facility to edit.
+ */
+function editFacility(facilityId) {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(response => {
+      hideLoading();
+      if (response.success && response.data) {
+        const facility = response.data;
+        document.getElementById('facilityId').value = facility.id;
+        document.getElementById('facilityName').value = facility.name;
+        document.getElementById('facilityDba').value = facility.dba || '';
+        document.getElementById('facilityAddressLine1').value = facility.addressLine1 || '';
+        document.getElementById('facilityAddressLine2').value = facility.addressLine2 || '';
+        document.getElementById('facilityCity').value = facility.city || '';
+        document.getElementById('facilityState').value = facility.state || '';
+        document.getElementById('facilityZipCode').value = facility.zipCode || '';
+        document.getElementById('facilityPhoneNumber').value = facility.phoneNumber || '';
+        document.getElementById('facilityFaxNumber').value = facility.faxNumber || '';
+        document.getElementById('facilityContactName').value = facility.contactName || '';
+        document.getElementById('facilityContactEmail').value = facility.contactEmail || '';
+        document.getElementById('facilityDeactivated').checked = facility.deactivated || false;
+        // Clear any sub-entity forms/tables if they were previously loaded for a different facility
+        // (Add specific logic for facility sub-entities if needed)
+      } else {
+        showError(response.message || 'Facility not found.');
+      }
+    })
+    .withFailureHandler(showError)
+    .getEntityDetails('Facilities', facilityId); // Use generic getEntityDetails
+}
+
+
+/**
+ * Saves a new facility or updates an existing one based on the form data.
+ */
+function addFacility() {
+  const facilityData = {
+    name: document.getElementById('facilityName').value,
+    dba: document.getElementById('facilityDba').value,
+    addressLine1: document.getElementById('facilityAddressLine1').value,
+    addressLine2: document.getElementById('facilityAddressLine2').value,
+    city: document.getElementById('facilityCity').value,
+    state: document.getElementById('facilityState').value,
+    zipCode: document.getElementById('facilityZipCode').value,
+    phoneNumber: document.getElementById('facilityPhoneNumber').value,
+    faxNumber: document.getElementById('facilityFaxNumber').value,
+    contactName: document.getElementById('facilityContactName').value,
+    contactEmail: document.getElementById('facilityContactEmail').value,
+    deactivated: document.getElementById('facilityDeactivated').checked
+  };
+
+  // Basic validation
+  if (!facilityData.name) {
+    showError('Facility Name is required.');
+    return;
+  }
+
+  showLoading();
+  google.script.run
+    .withSuccessHandler(response => {
+      hideLoading();
+      if (response.success) {
+        showMessage(response.message);
+        clearFacilityForm();
+        loadFacilities(facilityState.currentPage); // Reload current page
+      } else {
+        showError(response.message);
+      }
+    })
+    .withFailureHandler(showError)
+    .createFacility(facilityData);
+}
+
+/**
+ * Updates an existing facility using data from the form.
+ */
+function updateFacility() {
+  const facilityId = document.getElementById('facilityId').value;
+  if (!facilityId) {
+    showError('Select a facility to update by clicking "Edit" in the table.');
+    return;
+  }
+
+  const facilityData = {
+    id: facilityId,
+    name: document.getElementById('facilityName').value,
+    dba: document.getElementById('facilityDba').value,
+    addressLine1: document.getElementById('facilityAddressLine1').value,
+    addressLine2: document.getElementById('facilityAddressLine2').value,
+    city: document.getElementById('facilityCity').value,
+    state: document.getElementById('facilityState').value,
+    zipCode: document.getElementById('facilityZipCode').value,
+    phoneNumber: document.getElementById('facilityPhoneNumber').value,
+    faxNumber: document.getElementById('facilityFaxNumber').value,
+    contactName: document.getElementById('facilityContactName').value,
+    contactEmail: document.getElementById('facilityContactEmail').value,
+    deactivated: document.getElementById('facilityDeactivated').checked
+  };
+
+   // Basic validation
+  if (!facilityData.name) {
+    showError('Facility Name is required.');
+    return;
+  }
+
+  showLoading();
+  google.script.run
+    .withSuccessHandler(response => {
+      hideLoading();
+      if (response.success) {
+        showMessage(response.message);
+        clearFacilityForm();
+        loadFacilities(facilityState.currentPage); // Reload current page
+      } else {
+        showError(response.message);
+      }
+    })
+    .withFailureHandler(showError)
+    .updateFacility(facilityData);
+}
+
+/**
+ * Deletes a facility.
+ */
+function deleteFacility() {
+  const facilityId = document.getElementById('facilityId').value;
+  const facilityName = document.getElementById('facilityName').value;
+  if (!facilityId) {
+    showError('Select a facility to delete by clicking "Edit" in the table.');
+    return;
+  }
+
+   // Custom confirmation dialog
+  showCustomConfirmModal(
+    'Confirm Deletion',
+    `Are you sure you want to delete facility "${escapeHTML(facilityName)}" (ID: ${facilityId})? This will also delete all associated data (licenses, notes, files, etc.). This action cannot be undone.`,
+    () => {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(response => {
+          hideLoading();
+          if (response.success) {
+            showMessage(response.message);
+            clearFacilityForm();
+            loadFacilities(1); // Reload to first page as item is deleted
+          } else {
+            showError(response.message);
+          }
+        })
+        .withFailureHandler(showError)
+        .deleteFacility(facilityId);
+       closeModal('customConfirmModal'); // Close modal on confirmation
+    }
+  );
+}
+
+/**
+ * Clears the facility form fields.
+ */
+function clearFacilityForm() {
+  document.getElementById('facilityId').value = '';
+  document.getElementById('facilityName').value = '';
+  document.getElementById('facilityDba').value = '';
+  document.getElementById('facilityAddressLine1').value = '';
+  document.getElementById('facilityAddressLine2').value = '';
+  document.getElementById('facilityCity').value = '';
+  document.getElementById('facilityState').value = '';
+  document.getElementById('facilityZipCode').value = '';
+  document.getElementById('facilityPhoneNumber').value = '';
+  document.getElementById('facilityFaxNumber').value = '';
+  document.getElementById('facilityContactName').value = '';
+  document.getElementById('facilityContactEmail').value = '';
+  document.getElementById('facilityDeactivated').checked = false;
+}
+
+/**
+ * Initiates search for facilities when the user types in the search box.
+ * Uses a debounce to avoid excessive calls.
+ */
+let facilitySearchTimeout;
+function handleSearchFacility() {
+    clearTimeout(facilitySearchTimeout);
+    facilitySearchTimeout = setTimeout(() => {
+        loadFacilities(1); // Reset to page 1 on search
+    }, 300); // Wait for 300ms after typing stops
+}
+
+
+// --- Facility Details Modal ---
+
+/**
+ * Opens the modal to show detailed information for a facility.
+ * @param {string} facilityId The ID of the facility to show details for.
+ */
+function showFacilityDetailsModal(facilityId) {
+    showLoading();
+    google.script.run
+        .withSuccessHandler(response => {
+            hideLoading();
+            if (response.success && response.data) {
+                displayFacilityDetails(response.data);
+                openModal('facilityDetailsModal');
+            } else {
+                showError(response.message || 'Failed to load facility details.');
+            }
+        })
+        .withFailureHandler(showError)
+        .getFacilityDetails(facilityId);
+}
+
+
+/**
+ * Populates the facility details modal with data.
+ * @param {object} facility The facility data object.
+ */
+function displayFacilityDetails(facility) {
+    document.getElementById('modalFacilityName').textContent = escapeHTML(facility.name);
+    const detailsContentDiv = document.getElementById('facilityDetailsContent');
+    detailsContentDiv.innerHTML = ''; // Clear previous content
+
+    // Basic Info Section
+    detailsContentDiv.innerHTML += `
+        <div class="p-4 border rounded-lg bg-gray-50">
+            <h3 class="font-semibold text-gray-700 mb-2">Basic Info</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div><strong>ID:</strong> ${facility.id}</div>
+                <div><strong>DBA:</strong> ${escapeHTML(facility.dba || 'N/A')}</div>
+                <div><strong>Address:</strong> ${escapeHTML(facility.addressLine1 || '')}${facility.addressLine2 ? ', ' + escapeHTML(facility.addressLine2) : ''}, ${escapeHTML(facility.city || '')}, ${escapeHTML(facility.state || '')} ${escapeHTML(facility.zipCode || '')}</div>
+                <div><strong>Phone:</strong> ${escapeHTML(facility.phoneNumber || 'N/A')}</div>
+                <div><strong>Contact Name:</strong> ${escapeHTML(facility.contactName || 'N/A')}</div>
+                <div><strong>Contact Email:</strong> ${escapeHTML(facility.contactEmail || 'N/A')}</div>
+                <div><strong>Deactivated:</strong> ${facility.deactivated ? 'Yes' : 'No'}</div>
+            </div>
+        </div>
+    `;
+
+     // Specialties Section
+    if (facility.specialties && facility.specialties.length > 0) {
+        let specialtiesHTML = facility.specialties.map(spec => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Taxonomy ID:</strong> ${escapeHTML(spec.taxonomyId || 'N/A')}</div>
+                <div><strong>Taxonomy Name:</strong> ${escapeHTML(spec.taxonomyName || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Specialties (${facility.specialties.length})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${specialtiesHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Specialties</h3>
+                <p class="text-gray-500 text-sm">No specialties found.</p>
+             </div>
+        `;
+    }
+
+
+    // Licenses Section
+    if (facility.licenses && facility.licenses.length > 0) {
+         let licensesHTML = facility.licenses.map(lic => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Type:</strong> ${escapeHTML(lic.licenseTypeID || 'N/A')}</div>
+                <div><strong>Number:</strong> ${escapeHTML(lic.licenseNumber || 'N/A')}</div>
+                <div><strong>State:</strong> ${escapeHTML(lic.state || 'N/A')}</div>
+                <div><strong>Status:</strong> ${escapeHTML(lic.licenseStatus || 'N/A')}</div>
+                <div><strong>Expiration:</strong> ${escapeHTML(lic.expirationDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Licenses (${facility.licenses.length})</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${licensesHTML}</div>
+             </div>
+        `;
+    } else {
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Licenses</h3>
+                <p class="text-gray-500 text-sm">No licenses found.</p>
+             </div>
+        `;
+    }
+
+    // DEAs Section
+    if (facility.deas && facility.deas.length > 0) {
+         let deasHTML = facility.deas.map(dea => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Number:</strong> ${escapeHTML(dea.deaNumber || 'N/A')}</div>
+                <div><strong>State:</strong> ${escapeHTML(dea.state || 'N/A')}</div>
+                <div><strong>Expiration:</strong> ${escapeHTML(dea.expirationDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">DEAs (${facility.deas.length})</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${deasHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">DEAs</h3>
+                 <p class="text-gray-500 text-sm">No DEAs found.</p>
+             </div>
+        `;
+    }
+
+     // Liability Insurance Section
+    if (facility.liabilityInsurances && facility.liabilityInsurances.length > 0) {
+         let insHTML = facility.liabilityInsurances.map(ins => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Insurer:</strong> ${escapeHTML(ins.name || 'N/A')}</div>
+                <div><strong>Policy #:</strong> ${escapeHTML(ins.policyNumber || 'N/A')}</div>
+                <div><strong>Expiration:</strong> ${escapeHTML(ins.currentExpirationDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Liability Insurance (${facility.liabilityInsurances.length})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${insHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Liability Insurance</h3>
+                 <p class="text-gray-500 text-sm">No liability insurance found.</p>
+             </div>
+        `;
+    }
+
+    // Accreditations Section
+     if (facility.accreditations && facility.accreditations.length > 0) {
+         let accHTML = facility.accreditations.map(acc => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Agency:</strong> ${escapeHTML(acc.agency || 'N/A')}</div>
+                <div><strong>Program:</strong> ${escapeHTML(acc.program || 'N/A')}</div>
+                <div><strong>Expiration:</strong> ${escapeHTML(acc.expirationDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Accreditations (${facility.accreditations.length})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${accHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Accreditations</h3>
+                 <p class="text-gray-500 text-sm">No accreditations found.</p>
+             </div>
+        `;
+    }
+
+     // CMS Certifications Section
+     if (facility.cmsCertifications && facility.cmsCertifications.length > 0) {
+         let cmsHTML = facility.cmsCertifications.map(cms => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Number:</strong> ${escapeHTML(cms.certificationNumber || 'N/A')}</div>
+                <div><strong>Date:</strong> ${escapeHTML(cms.certificationDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">CMS Certifications (${facility.cmsCertifications.length})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cmsHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">CMS Certifications</h3>
+                 <p class="text-gray-500 text-sm">No CMS certifications found.</p>
+             </div>
+        `;
+    }
+
+     // Medicare Enrollments Section
+     if (facility.medicareEnrollments && facility.medicareEnrollments.length > 0) {
+         let medicareHTML = facility.medicareEnrollments.map(med => `
+             <div class="border p-3 rounded-md text-sm">
+                <div><strong>Number:</strong> ${escapeHTML(med.medicareNumber || 'N/A')}</div>
+                <div><strong>Status:</strong> ${escapeHTML(med.enrollmentStatus || 'N/A')}</div>
+                <div><strong>Effective:</strong> ${escapeHTML(med.effectiveDate || 'N/A')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Medicare Enrollments (${facility.medicareEnrollments.length})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${medicareHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Medicare Enrollments</h3>
+                 <p class="text-gray-500 text-sm">No Medicare enrollments found.</p>
+             </div>
+        `;
+    }
+
+
+     // Notes Section (simplified display)
+    if (facility.notes && facility.notes.length > 0) {
+        // Sort notes by timestamp descending
+        facility.notes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        let notesHTML = facility.notes.map(note => `
+            <div class="border-b border-gray-200 pb-2 text-sm last:border-b-0">
+                 <div class="text-xs text-gray-500">${formatDate(note.timestamp)} by ${escapeHTML(note.userEmail || 'Unknown')}</div>
+                <div class="text-gray-800 whitespace-pre-wrap">${escapeHTML(note.note)}</div>
+            </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+            <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Notes (${facility.notes.length})</h3>
+                <div class="space-y-3 max-h-48 overflow-y-auto">${notesHTML}</div>
+            </div>
+        `;
+    } else {
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Notes</h3>
+                 <p class="text-gray-500 text-sm">No notes found.</p>
+             </div>
+        `;
+    }
+
+    // Files Section (simplified display)
+     if (facility.files && facility.files.length > 0) {
+         let filesHTML = facility.files.map(file => `
+             <div class="border-b border-gray-200 pb-2 text-sm last:border-b-0">
+                 <div><strong>Filename:</strong> <a href="${escapeHTML(file.path)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline break-all">${escapeHTML(file.path.split('/').pop() || file.id)}</a></div>
+                 <div class="text-xs text-gray-500">Uploaded on ${formatDate(file.createdAt)} by ${escapeHTML(file.createdByEmail || 'Unknown')}</div>
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+            <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Files (${facility.files.length})</h3>
+                <div class="space-y-3 max-h-48 overflow-y-auto">${filesHTML}</div>
+            </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Files</h3>
+                 <p class="text-gray-500 text-sm">No files found.</p>
+             </div>
+        `;
+    }
+
+     // Dataset Scans Section (simplified display)
+    if (facility.scans && facility.scans.length > 0) {
+         let scansHTML = facility.scans.map(scan => `
+             <div class="border-b border-gray-200 pb-2 text-sm last:border-b-0">
+                <div><strong>Type:</strong> ${escapeHTML(scan.type || 'N/A')}</div>
+                <div><strong>Status:</strong> ${escapeHTML(scan.status || 'N/A')}</div>
+                <div><strong>Started:</strong> ${formatDate(scan.started)}</div>
+                 ${scan.completed ? `<div><strong>Completed:</strong> ${formatDate(scan.completed)}</div>` : ''}
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Dataset Scans (${facility.scans.length})</h3>
+                 <div class="space-y-3 max-h-48 overflow-y-auto">${scansHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Dataset Scans</h3>
+                 <p class="text-gray-500 text-sm">No dataset scans found.</p>
+             </div>
+        `;
+    }
+
+    // Alerts Section (simplified display)
+     if (facility.alerts && facility.alerts.length > 0) {
+         let alertsHTML = facility.alerts.map(alert => `
+             <div class="border-b border-gray-200 pb-2 text-sm last:border-b-0">
+                 <div><strong>Type:</strong> ${escapeHTML(alert.type || 'N/A')}</div>
+                 <div><strong>Timestamp:</strong> ${formatDate(alert.timestamp)}</div>
+                 ${alert.dismissalTimestamp ? `<div><strong>Dismissed:</strong> ${formatDate(alert.dismissalTimestamp)}</div>` : ''}
+             </div>
+        `).join('');
+        detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Alerts (${facility.alerts.length})</h3>
+                 <div class="space-y-3 max-h-48 overflow-y-auto">${alertsHTML}</div>
+             </div>
+        `;
+    } else {
+         detailsContentDiv.innerHTML += `
+             <div class="p-4 border rounded-lg bg-white">
+                <h3 class="font-semibold text-gray-700 mb-2">Alerts</h3>
+                 <p class="text-gray-500 text-sm">No alerts found.</p>
+             </div>
+        `;
+    }
+
+    // Add quick add note button
+    const detailsFooterDiv = document.getElementById('facilityDetailsFooter');
+    detailsFooterDiv.innerHTML = `<button onclick="openQuickAddNoteModal('${facility.id}', 'facility')" class="btn-primary">Add Note</button>`;
+
+}
+
+
+// --- Facility Sub-Entity Management (using Generic Dynamic Forms) ---
+
+// Functions like createFacilityDeaInfo, listFacilityDeaInfo, patchFacilityDeaInfo, deleteFacilityDeaInfo
+// createFacilityLiabilityInsuranceInfo, listFacilityLiabilityInsuranceInfo, patchFacilityLiabilityInsuranceInfo, deleteFacilityLiabilityInsuranceInfo
+// createFacilityLicenseInfo, listFacilityLicenseInfo, patchFacilityLicenseInfo, deleteFacilityLicenseInfo
+// createFacilityAccreditationInfo, listFacilityAccreditationInfo, patchFacilityAccreditationInfo, deleteFacilityAccreditationInfo
+// createFacilityCmsCertificationInfo, listFacilityCmsCertificationInfo, patchFacilityCmsCertificationInfo, deleteFacilityCmsCertificationInfo
+// createFacilityMedicareEnrollmentInfo, listFacilityMedicareEnrollmentInfo, patchFacilityMedicareEnrollmentInfo, deleteFacilityMedicareEnrollmentInfo
+// createFacilitySpecialty, listFacilitySpecialties, deleteFacilitySpecialty
+// are assumed to exist on the server-side and will be called dynamically by the generic form functions.
+
+</script>

@@ -1,0 +1,230 @@
+<script>
+    // state.files = { currentPage: 1, pageSize: config.pageSize, searchTerm: '' }; // Should be initialized elsewhere
+    // api = {}; // Should be initialized elsewhere
+    // showMessage = function() {}; // Should be initialized elsewhere
+    // viewProviderDetails = function() {}; // Should be initialized elsewhere
+    // viewFacilityDetails = function() {}; // Should be initialized elsewhere
+    // renderFiles = function() {}; // Should be initialized elsewhere
+    // renderPagination = function() {}; // Should be initialized elsewhere
+
+    /**
+     * Handles the upload of a file linked to an entity (Provider or Facility).
+     * @param {string} entityType - 'provider' or 'facility'.
+     * @param {string} entityId - The ID of the entity the file belongs to.
+     */
+    function uploadFileToEntity(entityType, entityId) {
+        const fileInput = document.getElementById(`entityFileInput-${entityId}`);
+        if (!entityId || !fileInput || fileInput.files.length === 0) {
+            showMessage('Please select a file to upload.', true);
+            return;
+        }
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const fileObject = {
+                fileName: file.name,
+                mimeType: file.type,
+                data: e.target.result // This will be a Data URL (base64)
+            };
+
+            const uploadStatus = document.getElementById(`uploadStatus-${entityId}`);
+            if (uploadStatus) {
+                uploadStatus.innerHTML = 'Uploading...';
+            }
+
+            // Determine the correct API function and refresh function based on entity type
+            const apiFunction = entityType === 'provider' ? 'uploadFileAndLinkToProvider' : 'uploadFileAndLinkToFacility';
+            const refreshFunction = entityType === 'provider' ? viewProviderDetails : viewFacilityDetails;
+
+            api.run(apiFunction, fileObject, entityId)
+                .then(res => {
+                    if (uploadStatus) {
+                        uploadStatus.innerHTML = ''; // Clear status message
+                    }
+                    if (res.success) {
+                        showMessage(res.message);
+                        // Refresh the details view of the parent entity
+                        if (refreshFunction) {
+                            refreshFunction(entityId);
+                        } else {
+                            // Fallback if no specific refresh function is found
+                            loadFiles(state.files.currentPage);
+                        }
+                    } else {
+                        showMessage(res.message, true);
+                    }
+                })
+                .catch(err => {
+                    if (uploadStatus) {
+                        uploadStatus.innerHTML = ''; // Clear status message on error
+                    }
+                    showMessage(err.message, true);
+                });
+        };
+
+        // Read the file as a Data URL
+        reader.readAsDataURL(file);
+    }
+
+
+    /**
+     * Deletes a file. Used from entity detail modals or the main Files tab.
+     * @param {string} fileId - The ID of the file to delete.
+     * @param {string} [entityType] - Optional: The type of the parent entity ('provider' or 'facility'). Needed to refresh the parent modal.
+     * @param {string} [entityId] - Optional: The ID of the parent entity. Needed to refresh the parent modal.
+     */
+    function deleteFileFromModal(fileId, entityType, entityId) {
+        showConfirmModal(
+            'Delete File',
+            `Are you sure you want to permanently delete this file? This action cannot be undone.`,
+            () => {
+                // Note: entityType and entityId are optional here, used only for refreshing a parent modal
+                api.run('deleteFile', fileId)
+                    .then(res => {
+                        if (res.success) {
+                            showMessage(res.message);
+                            // Try to refresh the parent modal if applicable
+                            if (entityType === 'provider' && entityId) {
+                                viewProviderDetails(entityId);
+                            } else if (entityType === 'facility' && entityId) {
+                                viewFacilityDetails(entityId);
+                            } else {
+                                // Otherwise, refresh the main Files tab list
+                                loadFiles(state.files.currentPage);
+                            }
+                        } else {
+                            showMessage(res.message, true);
+                        }
+                    })
+                    .catch(err => showMessage(err.message, true));
+            }
+        );
+    }
+
+    /**
+     * Loads the list of uploaded files metadata for the Files tab.
+     * @param {number} [page=1] - The page number to load.
+     */
+    function loadFiles(page = 1) {
+        state.files.currentPage = page;
+        const fileSearch = document.getElementById('fileSearch');
+        state.files.searchTerm = fileSearch ? fileSearch.value : ''; // Null check
+
+        const filesTableBody = document.getElementById('filesTableBody');
+        if (filesTableBody) { // Null check
+            filesTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Loading files...</td></tr>';
+        }
+
+        const options = {
+            page: state.files.currentPage,
+            pageSize: config.pageSize, // Assuming config is accessible
+            searchTerm: state.files.searchTerm
+        };
+
+        api.run('listUploadedFilesMetadata', options)
+            .then(response => {
+                if (response.success) {
+                    // state.files.data = response.data; // Store data if needed elsewhere
+                    renderFiles(response.data); // Assuming renderFiles exists
+                    renderPagination('files', state.files.currentPage, config.pageSize, response.totalRecords); // Assuming renderPagination exists
+                } else {
+                    showMessage(response.message, true);
+                    if (filesTableBody) { // Null check
+                        filesTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500">${response.message}</td></tr>`;
+                    }
+                    const filesPagination = document.getElementById('filesPagination');
+                    if (filesPagination) { // Null check
+                        filesPagination.innerHTML = ''; // Clear pagination on error
+                    }
+                }
+            })
+            .catch(err => {
+                showMessage(err.message, true);
+                if (filesTableBody) { // Null check
+                    filesTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500">${err.message}</td></tr>`;
+                }
+                const filesPagination = document.getElementById('filesPagination');
+                if (filesPagination) { // Null check
+                    filesPagination.innerHTML = ''; // Clear pagination on error
+                }
+            });
+    }
+
+    /**
+     * Opens a modal to view details of a specific file.
+     * @param {string} fileId - The ID of the file to view.
+     */
+    async function viewFileDetails(fileId) {
+        openModal('fileDetailsModal'); // Assuming openModal exists
+
+        const modalTitle = document.getElementById('fileDetailsModalTitle');
+        const modalContent = document.getElementById('fileDetailsContent');
+        const modalDownloadLink = document.getElementById('fileDetailsDownloadLink');
+
+        if (modalTitle) modalTitle.textContent = 'Loading File Details...';
+        if (modalContent) modalContent.innerHTML = '<p class="text-center">Loading file details...</p>';
+        if (modalDownloadLink) modalDownloadLink.style.display = 'none';
+
+        try {
+            const response = await api.run('getFileDetails', fileId); // Assuming getFileDetails API call exists
+            if (response.success) {
+                const file = response.data;
+                if (modalTitle) modalTitle.textContent = `File Details: ${file.fileName || file.id}`;
+
+                let entityLink = 'Unlinked';
+                if (file.entityType === 'Provider' && file.providerId) {
+                    entityLink = `Provider: <a href="#" onclick="closeModal('fileDetailsModal'); viewProviderDetails('${file.providerId}')" class="text-blue-600 hover:underline">${file.entityName || file.providerId}</a>`;
+                } else if (file.entityType === 'Facility' && file.facilityId) {
+                    entityLink = `Facility: <a href="#" onclick="closeModal('fileDetailsModal'); viewFacilityDetails('${file.facilityId}')" class="text-blue-600 hover:underline">${file.entityName || file.facilityId}</a>`;
+                }
+
+                if (modalContent) {
+                    modalContent.innerHTML = `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div><strong>File ID:</strong> <span>${file.id || 'N/A'}</span></div>
+                            <div><strong>File Name:</strong> <span>${file.fileName || 'N/A'}</span></div>
+                            <div><strong>Associated Entity:</strong> <span>${entityLink}</span></div>
+                            <div><strong>MIME Type:</strong> <span>${file.mimeType || 'N/A'}</span></div>
+                            <div><strong>Size (KB):</strong> <span>${file.size ? (file.size / 1024).toFixed(2) : 'N/A'}</span></div>
+                            <div><strong>Uploaded By:</strong> <span>${file.createdByUserEmail || 'N/A'}</span></div>
+                            <div><strong>Uploaded At:</strong> <span>${file.createdAt ? new Date(file.createdAt).toLocaleString() : 'N/A'}</span></div>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="font-semibold mb-2">Metadata</h4>
+                            <pre class="bg-gray-100 p-2 rounded-md text-xs max-h-32 overflow-auto">${file.metadata ? JSON.stringify(file.metadata, null, 2) : '{}'}</pre>
+                        </div>
+                    `;
+                }
+
+                if (modalDownloadLink && file.path) {
+                    modalDownloadLink.href = file.path;
+                    modalDownloadLink.style.display = 'inline-block'; // Show download button
+                }
+
+            } else {
+                showMessage(response.message, true);
+                if (modalContent) modalContent.innerHTML = `<p class="text-center text-red-500">${response.message}</p>`;
+                if (modalDownloadLink) modalDownloadLink.style.display = 'none';
+            }
+        } catch (err) {
+            showMessage(err.message, true);
+            if (modalContent) modalContent.innerHTML = `<p class="text-center text-red-500">${err.message}</p>`;
+            if (modalDownloadLink) modalDownloadLink.style.display = 'none';
+        }
+    }
+
+
+    // The following functions and state variables are assumed to be defined and accessible elsewhere:
+    // - state: Global state object containing state.files
+    // - config: Global config object containing config.pageSize
+    // - api: Global API object with run method
+    // - showMessage: Function to display messages
+    // - showConfirmModal: Function to display a confirmation modal
+    // - openModal: Function to open a modal
+    // - closeModal: Function to close a modal
+    // - viewProviderDetails: Function to view provider details (to refresh modal)
+    // - viewFacilityDetails: Function to view facility details (to refresh modal)
+    // - renderFiles: Function to render the files table body
+    // - renderPagination: Function to render the pagination controls
+</script>

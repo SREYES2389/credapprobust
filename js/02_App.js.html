@@ -1,0 +1,52 @@
+<script>
+    // =================================================================
+    // 3. INITIALIZATION
+    // =================================================================
+
+    /**
+     * Main entry point for the application. Attached to the DOMContentLoaded event.
+     * It orchestrates the loading of all initial data and setup of the UI.
+     */
+    function initializeApp() {
+        loadCurrentUser(); // Load user info first
+        loadDashboard();
+        loadMyTasks(); // Load user-specific tasks
+        loadProviders(1);
+        loadFacilities(1);
+        loadGroups();
+        populateEnrollmentDropdowns();
+        loadMonitors(1);
+        populateMonitorDropdowns();
+        loadCredentialingRequests();
+        loadUsers();
+        loadProviderStatusReport();
+        loadRequestStatusReport();
+        loadDatasetScans(1);
+        loadAlerts(1);
+        loadWebhooks();
+        loadFiles(1);
+        loadProfileImportSources(); // Load sources on app start
+        loadProfileImports(1); // Load initial list of imports
+        loadProviderLicenses(1); // Load all licenses for the new tab
+        loadLicenseTypeFilterDropdown(); // Load license types for filtering
+        loadFacilityTaxonomies(); // Load taxonomies for forms
+        loadRequestOwnersFilter();
+    }
+
+    /**
+     * Fetches the current user's info and updates the UI.
+     */
+    async function loadCurrentUser() {
+        try {
+            const user = await api.run('getCurrentUser');
+            if (user && user.email) {
+                state.currentUser = user;
+                document.getElementById('welcomeMessage').textContent = `Welcome, ${user.name || user.email}!`;
+            }
+        } catch (err) {
+            // Fail silently, user might be anonymous
+            console.log('Could not retrieve current user info.');
+        }
+    }
+
+</script>

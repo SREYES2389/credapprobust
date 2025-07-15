@@ -1,0 +1,137 @@
+<script>
+    // =================================================================
+    // 6. DATA HANDLERS (CRUD & LISTING) - Notes
+    // =================================================================
+
+    /**
+     * Loads all notes with pagination, search, and filtering.
+     * @param {number} [page=1] - The page number to load.
+     */
+    function loadAllNotes(page = 1) {
+        state.notes.currentPage = page;
+        const allNotesSearch = document.getElementById('allNotesSearch');
+        state.notes.searchTerm = allNotesSearch ? allNotesSearch.value : ''; // Null check
+
+        const allNotesTableBody = document.getElementById('allNotesTableBody');
+        if (allNotesTableBody) { // Null check
+            allNotesTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading notes...</td></tr>';
+        }
+
+        const options = {
+            page: state.notes.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.notes.searchTerm,
+            // Add status/type filters here if needed
+        };
+
+        api.run('listAllNotes', options).then(response => {
+            if (response.success) {
+                state.notes.data = response.data;
+                renderAllNotes(response.data); // Assuming renderAllNotes is in a rendering module
+                renderPagination('notes', state.notes.currentPage, config.pageSize, response.totalRecords); // Assuming renderPagination is in a rendering module
+            } else {
+                showMessage(response.message, true); // Assuming showMessage is in a UI/General module
+                if (allNotesTableBody) { // Null check
+                    allNotesTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+                const allNotesPagination = document.getElementById('allNotesPagination');
+                if (allNotesPagination) { // Null check
+                    allNotesPagination.innerHTML = '';
+                }
+            }
+        }).catch(err => showMessage(err.message, true)); // Assuming showMessage is in a UI/General module
+    }
+
+    /**
+     * Adds a new note to a specific entity (Provider, Facility, Request).
+     * @param {string} entityType - The type of entity ('provider', 'facility', 'request').
+     * @param {string} entityId - The ID of the entity.
+     */
+    function addNoteToEntity(entityType, entityId) {
+        const newNoteText = document.getElementById(`newNoteText-${entityId}`);
+        const noteText = newNoteText ? newNoteText.value : ''; // Null check
+
+        if (!noteText || !noteText.trim()) {
+            showMessage('Note cannot be empty.', true); // Assuming showMessage is in a UI/General module
+            return;
+        }
+
+        const noteData = { entityId, entityType, noteText };
+
+        api.run('addNote', noteData).then(res => {
+            if (res.success) {
+                showMessage(res.message); // Assuming showMessage is in a UI/General module
+                // Refresh the details modal of the entity the note was added to
+                if (entityType === 'provider') viewProviderDetails(entityId); // Assuming viewProviderDetails is in the Providers module
+                else if (entityType === 'facility') viewFacilityDetails(entityId); // Assuming viewFacilityDetails is in the Facilities module
+                else if (entityType === 'request') viewCredentialingRequest(entityId); // Assuming viewCredentialingRequest is in the Credentialing Requests module
+                // If the All Notes tab is open, refresh it as well
+                if (document.getElementById('Notes').classList.contains('active')) {
+                    loadAllNotes(state.notes.currentPage);
+                }
+            } else {
+                showMessage(res.message, true); // Assuming showMessage is in a UI/General module
+            }
+        }).catch(err => showMessage(err.message, true)); // Assuming showMessage is in a UI/General module
+    }
+
+    /**
+     * Saves the text of an edited note from the modal.
+     */
+    function saveEditedNote() {
+        const editNoteId = document.getElementById('editNoteId');
+        const editNoteText = document.getElementById('editNoteText');
+
+        const noteId = editNoteId ? editNoteId.value : ''; // Null check
+        const newText = editNoteText ? editNoteText.value : ''; // Null check
+
+        if (!newText.trim()) {
+            showMessage('Note cannot be empty.', true); // Assuming showMessage is in a UI/General module
+            return;
+        }
+
+        api.run('updateNote', noteId, newText).then(res => {
+            if (res.success) {
+                showMessage(res.message); // Assuming showMessage is in a UI/General module
+                closeModal('editNoteModal'); // Assuming closeModal is in a UI/General module
+                // Refresh the All Notes tab if it's currently active
+                if (document.getElementById('Notes').classList.contains('active')) {
+                    loadAllNotes(state.notes.currentPage);
+                }
+                // If the edit modal was opened from a detail modal (Provider/Facility/Request),
+                // you might need to add logic here to refresh that specific modal.
+                // This would require storing the parent entity ID/type when opening the edit modal.
+            } else {
+                showMessage(res.message, true); // Assuming showMessage is in a UI/General module
+            }
+        }).catch(err => showMessage(err.message, true)); // Assuming showMessage is in a UI/General module
+    }
+
+    /**
+     * Deletes a note after confirmation.
+     * @param {string} noteId - The ID of the note to delete.
+     */
+    function deleteNoteFromModal(noteId) {
+        showConfirmModal( // Assuming showConfirmModal is in a UI/General module
+            'Delete Note',
+            `Are you sure you want to permanently delete this note? This action cannot be undone.`,
+            () => {
+                api.run('deleteNote', noteId).then(res => {
+                    if (res.success) {
+                        showMessage(res.message); // Assuming showMessage is in a UI/General module
+                        // Assuming the delete was triggered from the All Notes tab, refresh it
+                        loadAllNotes(state.notes.currentPage); // Assuming loadAllNotes is in this file
+                    } else {
+                        showMessage(res.message, true); // Assuming showMessage is in a UI/General module
+                    }
+                }).catch(err => showMessage(err.message, true)); // Assuming showMessage is in a UI/General module
+            }
+        );
+    }
+
+    // --- Modal Content Renderers (related to notes in entity modals) ---
+    // The actual rendering function createNotesSection is likely in a Rendering module
+    // The function openEditNoteModal (which populates and opens the edit modal)
+    // is likely in a UI/General module or a specific modal handling module.
+
+</script>

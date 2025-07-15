@@ -1,0 +1,50 @@
+<script>
+    // Assume 'state' and 'config' are defined globally or in a parent scope
+    let searchTimeout; // Declare searchTimeout variable here if not declared globally
+
+    /**
+    * Debounces search input to prevent excessive API calls.
+    * @param {string} type - The type of entity being searched ('provider', 'facility', 'notes', 'auditLog', 'profileImports', 'alerts', 'datasetScans', 'files', 'monitors', 'licenses', 'requests').
+    */
+    function handleSearch(type) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            if (type === 'provider') loadProviders(1);
+            else if (type === 'facility') loadFacilities(1);
+            else if (type === 'notes') loadAllNotes(1);
+            else if (type === 'auditLog') loadEventLogEntries(1);
+            else if (type === 'profileImports') loadProfileImports(1);
+            else if (type === 'alerts') loadAlerts(1);
+            else if (type === 'datasetScans') loadDatasetScans(1);
+            else if (type === 'files') loadFiles(1);
+            else if (type === 'monitors') loadMonitors(1);
+            else if (type === 'licenses') loadProviderLicenses(1); // NEW
+            else if (type === 'requests') loadCredentialingRequests(1);
+        }, config.searchDebounce);
+    }
+
+    /**
+    * Filters rows of a table inside a modal based on user input.
+    * This is a client-side filter for already-rendered data.
+    * @param {string} inputId - The ID of the input element for the filter text.
+    * @param {string} tableId - The ID of the table to filter.
+    */
+    function filterModalTable(inputId, tableId) {
+        const input = document.getElementById(inputId);
+        const table = document.getElementById(tableId);
+        if (!input || !table) return;
+
+        const filter = input.value.toUpperCase();
+        const tr = table.getElementsByTagName("tr");
+
+        for (let i = 1; i < tr.length; i++) { // Start from 1 to skip header row
+            const row = tr[i];
+            const txtValue = row.textContent || row.innerText;
+            if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        }
+    }
+</script>

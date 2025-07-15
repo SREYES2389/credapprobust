@@ -1,0 +1,145 @@
+<script>
+    // =================================================================
+    // Reports Handlers
+    // =================================================================
+
+    /**
+     * Loads generated reports of a specific type.
+     * @param {string} reportType - The type of report to load ('Roster', 'Enrollments', etc.).
+     */
+    function loadGeneratedReports(reportType) {
+        state.reports.currentType = reportType;
+        const tableBody = document.getElementById('generatedReportsTableBody');
+        if (tableBody) { // Null check
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Loading reports...</td></tr>';
+        }
+
+        let apiFunctionName;
+        switch (reportType) {
+            case 'Roster': apiFunctionName = 'listRosterReports'; break;
+            case 'Enrollments': apiFunctionName = 'listEnrollmentsReports'; break;
+            case 'ExpirableCredentials': apiFunctionName = 'listExpirableCredentialsReports'; break;
+            case 'SanctionsAndExclusions': apiFunctionName = 'listSanctionsAndExclusionsReports'; break;
+            default:
+                showMessage('Unknown report type.', true);
+                if (tableBody) { // Null check
+                    tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-red-500">Unknown report type.</td></tr>';
+                }
+                return;
+        }
+
+        api.run(apiFunctionName).then(response => {
+            if (response.success) {
+                state.reports.data = response.data;
+                renderGeneratedReports(response.data);
+            } else {
+                showMessage(response.message, true);
+                if (tableBody) { // Null check
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+    /**
+     * Handles the click event for the "Generate Report" button.
+     * Gathers the selected report type and parameters, then calls the backend.
+     */
+    function handleGenerateReportClick() {
+        const reportType = document.getElementById('reportTypeSelect').value;
+        if (!reportType) {
+            showMessage('Please select a report type to generate.', true);
+            return;
+        }
+
+        const parameters = {};
+        if (reportType === 'Roster') {
+            const statusFilter = document.getElementById('rosterStatusFilter');
+            if (statusFilter && statusFilter.value) {
+                parameters.status = statusFilter.value;
+            }
+        }
+        // Add logic to gather parameters for other report types here
+
+        showConfirmModal(
+            `Generate ${reportType} Report`,
+            `Are you sure you want to generate a new ${reportType} report? This may take a moment.`,
+            () => {
+                showMessage(`Generating ${reportType} report...`, false);
+                api.run('generateReport', reportType, parameters)
+                    .then(res => {
+                        showMessage(res.message, !res.success);
+                        if (res.success) {
+                            // Refresh the list of generated reports for the current type
+                            if (state.reports.currentType) {
+                                loadGeneratedReports(state.reports.currentType);
+                            }
+                        }
+                    })
+                    .catch(err => showMessage(err.message, true));
+            },
+            'Generate',
+            'btn-primary'
+        );
+    }
+
+    /**
+     * Dynamically updates the UI to show relevant parameter fields for the selected report type.
+     */
+    function updateReportParameterUI() {
+        const reportType = document.getElementById('reportTypeSelect').value;
+        const paramsContainer = document.getElementById('reportParametersContainer');
+        paramsContainer.innerHTML = ''; // Clear existing parameters
+
+        if (reportType === 'Roster') {
+            paramsContainer.innerHTML = `<div><label for="rosterStatusFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Status (Optional):</label><select id="rosterStatusFilter" class="rounded-lg w-full"><option value="">All Statuses</option><option value="Data Collection">Data Collection</option><option value="Active">Active</option><option value="Needs Review">Needs Review</option><option value="Expired">Expired</option></select></div>`;
+        }
+        // Add 'else if' blocks for other report types with parameters
+    }
+
+    // --- Rendering Functions (assuming renderGeneratedReports and renderPagination are needed here) ---
+    function renderGeneratedReports(reports) {
+        const tableBody = document.getElementById('generatedReportsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!reports || reports.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-gray-500">No ${state.reports.currentType || ''} reports found.</td></tr>`;
+            return;
+        }
+
+        reports.forEach(report => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = report.type;
+
+            const statusCell = row.insertCell();
+            statusCell.textContent = report.status;
+            if (report.status === 'Completed') {
+                statusCell.className = 'text-green-600 font-semibold';
+            } else if (report.status === 'Failed') {
+                statusCell.className = 'text-red-600 font-semibold';
+            } else if (report.status === 'Working') {
+                statusCell.className = 'text-blue-600 font-semibold';
+            }
+
+            row.insertCell().textContent = report.completedAt ? new Date(report.completedAt).toLocaleString() : 'In Progress';
+
+            const actionsCell = row.insertCell();
+            if (report.status === 'Completed' && report.path) {
+                actionsCell.innerHTML = `<a href="${report.path}" target="_blank" rel="noopener noreferrer" class="btn-primary text-xs px-2 py-1">Download</a>`;
+            } else {
+                actionsCell.innerHTML = `<button class="btn-secondary text-xs px-2 py-1" disabled>N/A</button>`;
+            }
+        });
+    }
+
+    // Assuming renderPagination is a generic function, it should be in a general UI/Rendering file.
+    // Including a placeholder here if it's tightly coupled, but ideally it's elsewhere.
+    /*
+    function renderPagination(type, currentPage, pageSize, totalRecords) {
+         // Placeholder - actual implementation should be in a shared rendering file
+         console.log(`Rendering pagination for ${type}: Page ${currentPage} of ${Math.ceil(totalRecords / pageSize)}`);
+         // ... pagination rendering logic ...
+    }
+    */
+</script>

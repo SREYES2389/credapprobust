@@ -1,0 +1,116 @@
+<script>
+    // =================================================================
+    // 3. INITIALIZATION
+    // =================================================================
+    document.addEventListener('DOMContentLoaded', initializeApp);
+
+    /**
+     * Main entry point for the application. Loads all initial data.
+     */
+    async function initializeApp() {
+        await loadCurrentUser(); // Load user info first
+        loadDashboard();
+        loadMyTasks(); // Load user-specific tasks
+        loadProviders(1);
+        loadFacilities(1);
+        loadGroups();
+        populateEnrollmentDropdowns();
+        loadMonitors(1);
+        populateMonitorDropdowns();
+        loadCredentialingRequests(1); // Load initial page
+        loadUsers();
+        loadProviderStatusReport(); // Assuming this exists elsewhere or will be added
+        loadRequestStatusReport(); // Assuming this exists elsewhere or will be added
+        loadDatasetScans(1);
+        loadAlerts(1);
+        loadWebhooks();
+        loadFiles(1);
+        loadProfileImportSources(); // Load sources on app start
+        loadProfileImports(1); // Load initial list of imports
+        loadProviderLicenses(1); // NEW: Load all licenses for the new tab
+        loadLicenseTypeFilterDropdown(); // Assuming this exists elsewhere or will be added
+        loadFacilityTaxonomies(); // NEW: Load taxonomies for forms
+        loadRequestOwnersFilter();
+    }
+
+    /**
+     * Fetches the current user's info and updates the UI.
+     */
+    async function loadCurrentUser() {
+        try {
+            const user = await api.run('getCurrentUser');
+            if (user && user.email) {
+                state.currentUser = user;
+                const welcomeMessage = document.getElementById('welcomeMessage');
+                if (welcomeMessage) {
+                    welcomeMessage.textContent = `Welcome, ${user.name || user.email}!`;
+                }
+            }
+        } catch (err) {
+            // Fail silently, user might be anonymous or API call failed
+            console.log('Could not retrieve current user info:', err.message);
+            // Optionally show a message for debugging: showMessage('Could not load user info.', true);
+        }
+    }
+
+    /**
+     * Populates the provider dropdown for dataset scans.
+     */
+    function populateScanProviderDropdown() {
+        const select = document.getElementById('scanProviderSelect');
+        // Check if the element exists before trying to access its properties
+        if (select) {
+            select.innerHTML = '<option value="">-- Select a Provider --</option>';
+            // Assuming state.providers.data is accessible and populated elsewhere
+            if (state.providers && state.providers.data) {
+                 state.providers.data.forEach(p => select.innerHTML += `<option value="${p.id}">${p.firstName} ${p.lastName}</option>`);
+            } else {
+                 select.innerHTML = '<option value="">Loading providers...</option>';
+            }
+        }
+    }
+
+    /**
+     * Loads all available facility taxonomies and stores them in the state.
+     * Assuming api.run('listFacilityTaxonomies') exists.
+     */
+    async function loadFacilityTaxonomies() {
+        try {
+            const res = await api.run('listFacilityTaxonomies');
+            if (res.success) {
+                state.facilityTaxonomies = res.data;
+            } else {
+                showMessage(`Failed to load facility taxonomies: ${res.message}`, true);
+            }
+        } catch (err) { showMessage(`Error loading facility taxonomies: ${err.message}`, true); }
+    }
+
+    /**
+     * Loads the unique owners of credentialing requests for the filter dropdown.
+     * Assuming api.run('aggregateCredentialingRequestOwners') exists.
+     */
+    async function loadRequestOwnersFilter() {
+        try {
+            const res = await api.run('aggregateCredentialingRequestOwners');
+            if (res.success) {
+                state.requestOwners = res.data;
+                const select = document.getElementById('requestOwnerFilter');
+                if (select) { // Null check
+                    select.innerHTML = '<option value="">All Owners</option>';
+                    res.data.forEach(owner => {
+                        select.innerHTML += `<option value="${owner.email}">${owner.name || owner.email}</option>`;
+                    });
+                }
+            } else {
+                showMessage(`Failed to load request owners: ${res.message}`, true);
+            }
+        } catch (err) {
+            console.error("Error loading request owners:", err);
+            // Optionally show a message: showMessage("Error loading request owners.", true);
+        }
+    }
+
+    // Assuming other initialization functions (loadDashboard, loadMyTasks, etc.) are defined
+    // in other script files and will be loaded before this script or are globally accessible.
+
+</script>

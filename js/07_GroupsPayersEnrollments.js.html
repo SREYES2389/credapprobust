@@ -1,0 +1,198 @@
+<script>
+    // Group Handlers
+    function addGroup() {
+        const groupName = document.getElementById('groupName').value;
+        const groupNpi = document.getElementById('groupNpi').value;
+        const groupTaxId = document.getElementById('groupTaxId').value;
+        if (!groupName) { showMessage('Group Name is required.', true); return; }
+        const groupData = { name: groupName, npi: groupNpi, taxId: groupTaxId };
+        api.run('createGroup', groupData).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+            showMessage(err.message, true));
+    }
+    function updateGroup() {
+        const id = document.getElementById('groupId').value;
+        if (!id) { showMessage('Group ID is required to update.', true); return; }
+        const groupName = document.getElementById('groupName').value;
+        const groupNpi = document.getElementById('groupNpi').value;
+        const groupTaxId = document.getElementById('groupTaxId').value;
+        const groupData = { id: id, name: groupName, npi: groupNpi, taxId: groupTaxId };
+        api.run('updateGroup', groupData).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+            showMessage(err.message, true));
+    }
+    function deleteGroup() {
+        const id = document.getElementById('groupId').value;
+        if (!id) { showMessage('Select a group to delete.', true); return; }
+        showConfirmModal(
+            'Delete Group',
+            `Are you sure you want to delete group ${id} and all its relationships? This action cannot be undone.`,
+            () => {
+                api.run('deleteGroup', id).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+                    showMessage(err.message, true));
+            }
+        );
+    }
+    function loadGroups() {
+        const tableBody = document.getElementById('groupsTableBody');
+        if (tableBody) { // Null check
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading groups...</td></tr>';
+        }
+        api.run('listGroups').then(res => {
+            if (res.success && res.data) {
+                state.groups.data = res.data;
+                renderGroups(state.groups.data);
+            } else {
+                showMessage(res.message, true);
+                if (tableBody) { // Null check
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No groups found.</td></tr>';
+                }
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+
+    // --- Payer & Enrollment Handlers ---
+    function savePayer() {
+        const id = document.getElementById('payerId');
+        const payerName = document.getElementById('payerName');
+        const payerData = {
+            id: id ? id.value : '',
+            name: payerName ? payerName.value : ''
+        };
+        if (!payerData.name) { showMessage('Payer Name is required.', true); return; }
+        const apiCall = payerData.id ? api.run('updatePayer', payerData) : api.run('createPayer', payerData);
+        apiCall.then(handleSaveResponse(loadPayers, clearPayerForm)).catch(err => showMessage(err.message, true));
+    }
+    function deletePayer() {
+        const id = document.getElementById('payerId');
+        if (!id || !id.value) { showMessage('Select a payer to delete.', true); return; }
+        showConfirmModal(
+            'Delete Payer',
+            `Are you sure you want to delete payer ${id.value} and all associated plans and enrollments? This action cannot be undone.`,
+            () => {
+                api.run('deletePayer', id.value).then(handleSaveResponse(loadPayers, clearPayerForm)).catch(err =>
+                    showMessage(err.message, true));
+            }
+        );
+    }
+    function loadPayers() {
+        api.run('listPayers').then(res => {
+            if (res.success) { state.payers = res.data; renderPayers(state.payers); }
+        }).catch(err => showMessage(err.message, true));
+    }
+    function savePayerPlan() {
+        const id = document.getElementById('planId');
+        const planPayerId = document.getElementById('planPayerId');
+        const planName = document.getElementById('planName');
+        const planState = document.getElementById('planState');
+
+        const planData = {
+            id: id ? id.value : '',
+            payerId: planPayerId ? planPayerId.value : '',
+            name: planName ? planName.value : '',
+            state: planState ? planState.value : ''
+        };
+        if (!planData.payerId || !planData.name) { showMessage('Payer ID and Plan Name are required.', true); return; }
+        const refreshFunc = () => loadPayerPlans(planData.payerId);
+        const apiCall = planData.id ? api.run('updatePayerPlan', planData) : api.run('createPayerPlan', planData);
+        apiCall.then(handleSaveResponse(refreshFunc, clearPayerPlanForm)).catch(err => showMessage(err.message, true));
+    }
+    function deletePayerPlan() {
+        const id = document.getElementById('planId');
+        const payerId = document.getElementById('planPayerId');
+        if (!id || !id.value) { showMessage('Select a plan to delete.', true); return; }
+        showConfirmModal(
+            'Delete Payer Plan',
+            `Are you sure you want to delete this plan ${id.value} and all associated enrollments? This action cannot be undone.`,
+            () => {
+                const refreshFunc = () => loadPayerPlans(payerId ? payerId.value : '');
+                api.run('deletePayerPlan', id.value).then(handleSaveResponse(refreshFunc, clearPayerPlanForm)).catch(err =>
+                    showMessage(err.message, true));
+            }
+        );
+    }
+    function loadPayerPlans(payerId) {
+        api.run('listPayerPlans', payerId).then(res => {
+            if (res.success) renderPayerPlans(res.data);
+        }).catch(err => showMessage(err.message, true));
+    }
+    function saveProviderEnrollment() {
+        const enrollmentId = document.getElementById('enrollmentId');
+        const enrollmentProviderId = document.getElementById('enrollmentProviderId');
+        const enrollmentGroupId = document.getElementById('enrollmentGroupId');
+        const enrollmentPayerPlanId = document.getElementById('enrollmentPayerPlanId');
+        const effectiveDate = document.getElementById('effectiveDate');
+        const enrollmentStatus = document.getElementById('enrollmentStatus');
+        const networkStatus = document.getElementById('networkStatus');
+        const specialistType = document.getElementById('specialistType');
+        const submissionDate = document.getElementById('submissionDate');
+        const closedDate = document.getElementById('closedDate');
+        const externalProviderPlanId = document.getElementById('externalProviderPlanId');
+        const enrollmentComments = document.getElementById('enrollmentComments');
+
+        const enrollmentData = {
+            id: enrollmentId ? enrollmentId.value : '',
+            providerId: enrollmentProviderId ? enrollmentProviderId.value : '',
+            groupId: enrollmentGroupId ? enrollmentGroupId.value : '',
+            payerPlanId: enrollmentPayerPlanId ? enrollmentPayerPlanId.value : '',
+            effectiveDate: effectiveDate ? effectiveDate.value : '',
+            enrollmentStatus: enrollmentStatus ? enrollmentStatus.value : 'NotSubmitted',
+            networkStatus: networkStatus ? networkStatus.value : 'None',
+            specialistType: specialistType ? specialistType.value : 'None',
+            submissionDate: submissionDate ? submissionDate.value : '',
+            closedDate: closedDate ? closedDate.value : '',
+            externalProviderPlanId: externalProviderPlanId ? externalProviderPlanId.value : '',
+            comments: enrollmentComments ? enrollmentComments.value : ''
+        };
+        if (!enrollmentData.providerId || !enrollmentData.groupId || !enrollmentData.payerPlanId) { showMessage('Provider, Group, and Payer Plan are required.', true); return; }
+        const refreshFunc = () => loadProviderEnrollments();
+        const apiCall = enrollmentData.id ? api.run('updateProviderEnrollment', enrollmentData) :
+            api.run('createProviderEnrollment', enrollmentData);
+        apiCall.then(handleSaveResponse(refreshFunc, clearEnrollmentForm)).catch(err => showMessage(err.message, true));
+    }
+    function deleteProviderEnrollment() {
+        const id = document.getElementById('enrollmentId');
+        if (!id || !id.value) { showMessage('Select an enrollment to delete.', true); return; }
+        showConfirmModal(
+            'Delete Enrollment',
+            `Are you sure you want to delete this enrollment ${id.value}? This action cannot be undone.`,
+            () => {
+                api.run('deleteProviderEnrollment', id.value).then(handleSaveResponse(loadProviderEnrollments,
+                    clearEnrollmentForm)).catch(err => showMessage(err.message, true));
+            }
+        );
+    }
+    function loadProviderEnrollments() {
+        const enrollmentProviderId = document.getElementById('enrollmentProviderId');
+        const providerId = enrollmentProviderId ? enrollmentProviderId.value : ''; // Null check
+        const providerEnrollmentsTableBody = document.getElementById('providerEnrollmentsTableBody');
+        if (!providerId) {
+            if (providerEnrollmentsTableBody) { // Null check
+                providerEnrollmentsTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Select a provider to view enrollments.</td></tr>';
+            }
+            return;
+        }
+        api.run('listProviderEnrollments', providerId).then(res => {
+            if (res.success) renderProviderEnrollments(res.data);
+        }).catch(err => showMessage(err.message, true));
+    }
+    function populateEnrollmentDropdowns() {
+        api.run('listGroups').then(res => {
+            if (res.success) {
+                const select = document.getElementById('enrollmentGroupId');
+                if (select) { // Null check
+                    select.innerHTML = '<option value="">Select a Group</option>';
+                    res.data.forEach(group => { select.innerHTML += `<option value="${group.id}">${group.name}</option>`; });
+                }
+            }
+        }).catch(err => showMessage(err.message, true));
+        api.run('listPayerPlans', null).then(res => {
+            if (res.success) {
+                const select = document.getElementById('enrollmentPayerPlanId');
+                if (select) { // Null check
+                    select.innerHTML = '<option value="">Select a Payer Plan</option>';
+                    res.data.forEach(plan => { select.innerHTML += `<option value="${plan.id}">${plan.name} (${plan.state || 'N/A'})</option>`; });
+                }
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+</script>

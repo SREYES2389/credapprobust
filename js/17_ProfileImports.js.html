@@ -1,0 +1,180 @@
+<script>
+    // =================================================================
+    // Profile Imports Handlers
+    // =================================================================
+
+    async function loadProfileImportSources() {
+        try {
+            const [providerSourcesRes, facilitySourcesRes] = await Promise.all([
+                api.run('listProviderProfileImportSources'),
+                api.run('listFacilityProfileImportSources')
+            ]);
+            if (providerSourcesRes.success) {
+                state.importSources.provider = providerSourcesRes.data;
+            } else {
+                showMessage(`Failed to load provider import sources: ${providerSourcesRes.message}`, true);
+            }
+            if (facilitySourcesRes.success) {
+                state.importSources.facility = facilitySourcesRes.data;
+            } else {
+                showMessage(`Failed to load facility import sources: ${facilitySourcesRes.message}`, true);
+            }
+        } catch (err) {
+            showMessage(`Error loading import sources: ${err.message}`, true);
+        }
+    }
+
+    function updateImportSourceOptions() {
+        const importEntityType = document.getElementById('importEntityType');
+        const entityType = importEntityType ? importEntityType.value : ''; // Null check
+        const importSourceSelect = document.getElementById('importSource');
+        if (importSourceSelect) { // Null check
+            importSourceSelect.innerHTML = '<option value="">-- Select Source --</option>';
+            importSourceSelect.disabled = true;
+        }
+        const sources = state.importSources[entityType];
+        if (sources && sources.length > 0) {
+            if (importSourceSelect) { // Null check
+                sources.forEach(source => {
+                    const option = document.createElement('option');
+                    option.value = source.source;
+                    option.textContent = source.name;
+                    importSourceSelect.appendChild(option);
+                });
+                importSourceSelect.disabled = false;
+            }
+        }
+        const importParametersContainer = document.getElementById('importParametersContainer');
+        if (importParametersContainer) { // Null check
+            importParametersContainer.innerHTML = '';
+        }
+    }
+
+    async function initiateProfileImport() {
+        const importEntityType = document.getElementById('importEntityType');
+        const importEntityId = document.getElementById('importEntityId');
+        const importSource = document.getElementById('importSource');
+
+        const entityType = importEntityType ? importEntityType.value : ''; // Null check
+        const entityId = importEntityId ? importEntityId.value.trim() : ''; // Null check
+        const source = importSource ? importSource.value : ''; // Null check
+
+        if (!entityType || !entityId || !source) {
+            showMessage('Please select an entity type, enter an entity ID, and select an import source.', true);
+            return;
+        }
+
+        showConfirmModal(
+            'Initiate Profile Import',
+            `Are you sure you want to initiate a profile import for ${entityType} ID: ${entityId} from ${source}?`,
+            async () => {
+                const importData = {
+                    source: source
+                };
+                if (entityType === 'provider') {
+                    importData.providerId = entityId;
+                } else if (entityType === 'facility') {
+                    importData.facilityId = entityId;
+                }
+                try {
+                    let response;
+                    if (entityType === 'provider') {
+                        response = await api.run('createProviderProfileImport', importData);
+                    } else if (entityType === 'facility') {
+                        response = await api.run('createFacilityProfileImport', importData);
+                    }
+                    if (response.success) {
+                        showMessage(response.message);
+                        clearProfileImportForm();
+                        loadProfileImports(1);
+                    } else {
+                        showMessage(response.message, true);
+                    }
+                } catch (err) {
+                    showMessage(`Error initiating import: ${err.message}`, true);
+                }
+            }
+        );
+    }
+
+    function clearProfileImportForm() {
+        const importEntityType = document.getElementById('importEntityType');
+        if (importEntityType) importEntityType.value = '';
+        const importEntityId = document.getElementById('importEntityId');
+        if (importEntityId) importEntityId.value = '';
+        const importSource = document.getElementById('importSource');
+        if (importSource) {
+            importSource.innerHTML = '<option value="">-- Select Source --</option>';
+            importSource.disabled = true;
+        }
+        const importParametersContainer = document.getElementById('importParametersContainer');
+        if (importParametersContainer) importParametersContainer.innerHTML = '';
+    }
+
+    async function loadProfileImports(page = 1) {
+        state.profileImports.currentPage = page;
+        const profileImportSearch = document.getElementById('profileImportSearch');
+        state.profileImports.searchTerm = profileImportSearch ? profileImportSearch.value : ''; // Null check
+        const profileImportStatusFilter = document.getElementById('profileImportStatusFilter');
+        state.profileImports.statusFilter = profileImportStatusFilter ? profileImportStatusFilter.value : ''; // Null check
+        const profileImportsTableBody = document.getElementById('profileImportsTableBody');
+        if (profileImportsTableBody) { // Null check
+            profileImportsTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Loading profile imports...</td></tr>';
+        }
+        const options = {
+            page: state.profileImports.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.profileImports.searchTerm,
+            status: state.profileImports.statusFilter
+        };
+        try {
+            // Assuming a single API call for all types for simplicity, adjust if needed
+            const allImportsRes = await api.run('listProfileImports', options); // Placeholder API call
+
+            let allImports = [];
+            if (allImportsRes.success) {
+                allImports = allImportsRes.data;
+                state.profileImports.totalRecords = allImportsRes.totalRecords;
+            } else {
+                showMessage(`Failed to load profile imports: ${allImportsRes.message}`, true);
+            }
+
+            renderProfileImports(allImports);
+            renderPagination('profileImports', state.profileImports.currentPage, config.pageSize, state.profileImports.totalRecords);
+        } catch (err) {
+            showMessage(`Error loading profile imports: ${err.message}`, true);
+            if (profileImportsTableBody) { // Null check
+                profileImportsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500">${err.message}</td></tr>`;
+            }
+            const profileImportsPagination = document.getElementById('profileImportsPagination');
+            if (profileImportsPagination) { // Null check
+                profileImportsPagination.innerHTML = '';
+            }
+        }
+    }
+
+    function renderProfileImports(imports) {
+        const tableBody = document.getElementById('profileImportsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!imports || imports.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-500">No profile imports found.</td></tr>';
+            return;
+        }
+        imports.forEach(job => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = job.id.substring(0, 8) + '...';
+            row.insertCell().textContent = job.providerId || job.facilityId || 'N/A';
+            row.insertCell().textContent = job.source;
+            row.insertCell().textContent = job.status;
+            row.insertCell().textContent = job.started ? new Date(job.started).toLocaleString() : 'N/A';
+            row.insertCell().textContent = job.completed ? new Date(job.completed).toLocaleString() : 'N/A';
+            row.insertCell().innerHTML = `<button onclick="viewProfileImportDetails('${job.id}')" class="text-blue-500 hover:underline text-xs mr-2">View</button>`;
+        });
+    }
+
+    // NOTE: viewProfileImportDetails function is assumed to be handled elsewhere, likely opening a modal.
+    // If it was in the original large file, it would need to be moved to a relevant rendering/modal file or kept in a central modal handler file.
+    // The original prompt for this modularization step didn't explicitly include viewProfileImportDetails in this file.
+</script>

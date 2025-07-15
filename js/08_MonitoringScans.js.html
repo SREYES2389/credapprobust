@@ -1,0 +1,499 @@
+<script>
+    // =================================================================
+    // Monitoring Handlers
+    // =================================================================
+
+    function toggleMonitorFields() {
+        const monitorType = document.getElementById('monitorType').value;
+        const datasetContainer = document.getElementById('monitorDatasetTypeContainer');
+        const licenseContainer = document.getElementById('monitorLicenseIdContainer');
+
+        if (datasetContainer) datasetContainer.style.display = (monitorType === 'Dataset') ? 'block' : 'none';
+        if (licenseContainer) licenseContainer.style.display = (monitorType === 'License') ? 'block' : 'none';
+
+        // Dynamically populate license dropdown if switching to License type and licenses aren't loaded
+        if (monitorType === 'License' && (!document.getElementById('monitorLicenseId').options || document.getElementById('monitorLicenseId').options.length <= 1)) {
+            populateMonitorLicenseDropdown();
+        }
+    }
+
+    async function populateMonitorDropdowns() {
+        await populateMonitorProviderDropdown();
+        // License dropdown will be populated when toggleMonitorFields is called for License type
+    }
+
+    async function populateMonitorProviderDropdown() {
+        const providerSelect = document.getElementById('monitorProviderId');
+        if (!providerSelect) return;
+        providerSelect.innerHTML = '<option value="">Loading Providers...</option>';
+        try {
+            const res = await api.run('getProviders', { pageSize: 5000, sortBy: 'lastName' });
+            if (res.success) {
+                providerSelect.innerHTML = '<option value="">-- Select Provider --</option>';
+                res.data.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `${p.lastName}, ${p.firstName} (ID: ${p.id.substring(0, 8)}...)`;
+                    providerSelect.appendChild(option);
+                });
+            } else {
+                providerSelect.innerHTML = '<option value="">Error loading providers</option>';
+                showMessage(res.message, true);
+            }
+        } catch (err) {
+            providerSelect.innerHTML = '<option value="">Error loading providers</option>';
+            showMessage(err.message, true);
+        }
+    }
+
+     async function populateMonitorLicenseDropdown(providerId = null) {
+        const licenseSelect = document.getElementById('monitorLicenseId');
+        if (!licenseSelect) return;
+        licenseSelect.innerHTML = '<option value="">Loading Licenses...</option>';
+        try {
+            // If providerId is specified, fetch licenses for that provider, otherwise fetch all
+            const res = providerId
+                ? await api.run('listProviderLicenses', { providerId: providerId, pageSize: 5000 })
+                : await api.run('listProviderLicenses', { pageSize: 5000 }); // Fetch all for initial load
+
+            if (res.success) {
+                licenseSelect.innerHTML = '<option value="">-- Select License --</option>';
+                res.data.forEach(l => {
+                     const option = document.createElement('option');
+                     option.value = l.id;
+                     option.textContent = `${l.licenseNumber} (${l.state}) - ${l.providerName || l.providerId.substring(0,8) + '...'}`;
+                     licenseSelect.appendChild(option);
+                });
+            } else {
+                licenseSelect.innerHTML = '<option value="">Error loading licenses</option>';
+                 showMessage(res.message, true);
+            }
+        } catch (err) {
+            licenseSelect.innerHTML = '<option value="">Error loading licenses</option>';
+            showMessage(err.message, true);
+        }
+    }
+
+
+    function clearMonitorForm() {
+        const monitorId = document.getElementById('monitorId');
+        if (monitorId) monitorId.value = '';
+        const monitorType = document.getElementById('monitorType');
+         if (monitorType) monitorType.value = 'Dataset';
+        const monitorProviderId = document.getElementById('monitorProviderId');
+         if (monitorProviderId) monitorProviderId.value = '';
+        const monitorDatasetType = document.getElementById('monitorDatasetType');
+         if (monitorDatasetType) monitorDatasetType.value = 'OigExclusions';
+        const monitorLicenseId = document.getElementById('monitorLicenseId');
+         if (monitorLicenseId) monitorLicenseId.value = '';
+        const monitorInterval = document.getElementById('monitorInterval');
+         if (monitorInterval) monitorInterval.value = 'Continuous';
+
+
+        // Re-enable fields that might be disabled during edit
+        if (monitorType) monitorType.disabled = false;
+        if (monitorProviderId) monitorProviderId.disabled = false;
+        if (monitorDatasetType) monitorDatasetType.disabled = false;
+        if (monitorLicenseId) monitorLicenseId.disabled = false;
+
+        toggleMonitorFields();
+    }
+
+    function addMonitor() {
+         const monitorType = document.getElementById('monitorType');
+         const monitorProviderId = document.getElementById('monitorProviderId');
+         const monitorDatasetType = document.getElementById('monitorDatasetType');
+         const monitorLicenseId = document.getElementById('monitorLicenseId');
+         const monitorInterval = document.getElementById('monitorInterval');
+
+        const monitorData = {
+            type: monitorType ? monitorType.value : '',
+            providerId: monitorProviderId ? monitorProviderId.value : '',
+            datasetType: monitorDatasetType ? monitorDatasetType.value : '',
+            licenseId: monitorLicenseId ? monitorLicenseId.value : '',
+            monitoringInterval: monitorInterval ? monitorInterval.value : 'Continuous',
+        };
+
+        if (!monitorData.providerId || !monitorData.type) {
+            showMessage('Provider and Type are required.', true);
+            return;
+        }
+        if (monitorData.type === 'Dataset' && !monitorData.datasetType) {
+            showMessage('Dataset Type is required for a Dataset monitor.', true);
+            return;
+        }
+        if (monitorData.type === 'License' && !monitorData.licenseId) {
+            showMessage('License ID is required for a License monitor.', true);
+            return;
+        }
+
+        // Clear the irrelevant field before sending
+        if (monitorData.type === 'Dataset') {
+            monitorData.licenseId = null;
+        } else {
+            monitorData.datasetType = null;
+        }
+
+        api.run('createMonitor', monitorData)
+            .then(handleSaveResponse(() => loadMonitors(1), clearMonitorForm))
+            .catch(err => showMessage(err.message, true));
+    }
+
+    function updateMonitor() {
+        const monitorId = document.getElementById('monitorId');
+         if (!monitorId || !monitorId.value) {
+            showMessage('Monitor ID is required to update.', true);
+            return;
+        }
+        const monitorInterval = document.getElementById('monitorInterval');
+        const monitorData = {
+            monitoringInterval: monitorInterval ? monitorInterval.value : 'Continuous',
+        };
+
+        api.run('patchMonitor', monitorId.value, monitorData)
+            .then(handleSaveResponse(() => loadMonitors(state.monitors.currentPage), clearMonitorForm))
+            .catch(err => showMessage(err.message, true));
+    }
+
+    function deleteMonitor() {
+         const monitorId = document.getElementById('monitorId');
+        if (!monitorId || !monitorId.value) {
+            showMessage('Select a monitor to delete.', true);
+            return;
+        }
+        showConfirmModal(
+            'Delete Monitor',
+            `Are you sure you want to delete monitor ${monitorId.value}? This action cannot be undone.`,
+            () => {
+                api.run('deleteMonitor', monitorId.value)
+                    .then(handleSaveResponse(() => loadMonitors(1), clearMonitorForm))
+                    .catch(err => showMessage(err.message, true));
+            }
+        );
+    }
+
+    function loadMonitors(page = 1) {
+        state.monitors.currentPage = page;
+        const monitorSearch = document.getElementById('monitorSearch');
+        state.monitors.searchTerm = monitorSearch ? monitorSearch.value : '';
+        const tableBody = document.getElementById('monitorsTableBody');
+        if (tableBody) {
+             tableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading monitors...</td></tr>';
+        }
+
+        const options = {
+            page: state.monitors.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.monitors.searchTerm,
+            sortBy: 'nextMonitoringDate',
+            sortOrder: 'asc'
+        };
+
+        api.run('listMonitors', options).then(response => {
+            if (response.success) {
+                state.monitors.data = response.data;
+                renderMonitors(response.data);
+                renderPagination('monitors', state.monitors.currentPage, config.pageSize, response.totalRecords);
+            } else {
+                showMessage(response.message, true);
+                if (tableBody) {
+                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+                 const monitorsPagination = document.getElementById('monitorsPagination');
+                if (monitorsPagination) monitorsPagination.innerHTML = '';
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+    function bulkMonitorSanctions() {
+        showConfirmModal(
+            'Bulk Monitor Sanctions',
+            'This will create standard sanctions monitors (OIG, SAM, State) for all active providers who are not already being monitored. This may take a moment. Continue?',
+            async () => {
+                showMessage('Initiating bulk monitoring setup...', false);
+                const providersRes = await api.run('getProviders', { pageSize: 5000 });
+                if (!providersRes.success) { showMessage(providersRes.message, true); return; }
+                const providerIds = providersRes.data.map(p => p.id);
+                const response = await api.run('bulkCreateSanctionsAndExclusionsMonitors', providerIds);
+                showMessage(response.message, !response.success);
+                if (response.success) { loadMonitors(1); }
+            }, 'Confirm & Start', 'btn-primary'
+        );
+    }
+
+
+    // =================================================================
+    // Dataset Scan Handlers
+    // =================================================================
+
+     /**
+     * Populates the provider dropdown for dataset scans.
+     */
+    function populateScanProviderDropdown() {
+        const select = document.getElementById('scanProviderSelect');
+        if (select && state.providers.data) { // Check if the element and data exist
+            select.innerHTML = '<option value="">-- Select a Provider --</option>';
+            state.providers.data.forEach(p => select.innerHTML += `<option value="${p.id}">${p.firstName} ${p.lastName}</option>`);
+        }
+    }
+
+    function startScan() {
+        const scanProviderSelect = document.getElementById('scanProviderSelect');
+        const scanDatasetType = document.getElementById('scanDatasetType');
+        const providerId = scanProviderSelect ? scanProviderSelect.value : ''; // Null check
+        const datasetType = scanDatasetType ? scanDatasetType.value : ''; // Null check
+        if (!providerId || !datasetType) {
+            showMessage('Please select a provider and a dataset type.', true);
+            return;
+        }
+        const body = { providerId: providerId, type: datasetType };
+        showMessage(`Starting scan for provider ...`, false);
+        api.run('startDatasetScan', body).then(res => {
+            showMessage(res.message, !res.success);
+            if (res.success) {
+                loadDatasetScans(1);
+                loadAlerts(1); // Refresh alerts list
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+     function loadDatasetScans(page = 1) {
+        state.datasetScans.currentPage = page;
+        const datasetScanSearch = document.getElementById('datasetScanSearch');
+        state.datasetScans.searchTerm = datasetScanSearch ? datasetScanSearch.value : '';
+        const tableBody = document.getElementById('datasetScansTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading scans...</td></tr>';
+        }
+
+        const options = {
+            page: state.datasetScans.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.datasetScans.searchTerm,
+            sortBy: 'started',
+            sortOrder: 'desc'
+        };
+
+        api.run('listDatasetScans', options).then(response => {
+            if (response.success) {
+                state.datasetScans.data = response.data;
+                renderDatasetScans(response.data);
+                renderPagination('datasetScans', state.datasetScans.currentPage, config.pageSize, response.totalRecords);
+            } else {
+                showMessage(response.message, true);
+                 if (tableBody) {
+                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500">${response.message}</td></tr>`;
+                 }
+                 const datasetScansPagination = document.getElementById('datasetScansPagination');
+                 if (datasetScansPagination) datasetScansPagination.innerHTML = '';
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+     function viewScanDetails(scanId) {
+        // This function likely still relies on a modal.
+        // If removing modals completely, this function will need to be re-architected
+        // to display details directly on the page or in a different UI element.
+        // For now, keeping the modal interaction as per the original code's likely structure.
+        openModal('scanDetailsModal'); // Assuming openModal exists elsewhere
+        const modalScanId = document.getElementById('modalScanId');
+        if (modalScanId) modalScanId.textContent = scanId.substring(0, 8) + '...';
+        const contentDiv = document.getElementById('scanDetailsContent');
+        const matchesBody = document.getElementById('datasetMatchesTableBody');
+        if (contentDiv) contentDiv.innerHTML = '<p class="text-center">Loading scan details...</p>';
+         if (matchesBody) matchesBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading matches...</td></tr>';
+
+
+        api.run('getDatasetScan', scanId).then(scanRes => {
+            if (!scanRes.success) throw new Error(scanRes.message);
+            const scan = scanRes.data;
+
+            // Render scan details
+            if (contentDiv) {
+                 contentDiv.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                        <div><strong>Type:</strong> <span>${scan.type || 'N/A'}</span></div>
+                        <div><strong>Status:</strong> <span>${scan.status || 'N/A'}</span></div>
+                        <div><strong>Entity ID:</strong> <span>${scan.providerId || scan.facilityId || 'N/A'}</span></div>
+                        <div><strong>Trigger:</strong> <span>${scan.trigger || 'N/A'}</span></div>
+                        <div><strong>Started:</strong> <span>${scan.started ? new Date(scan.started).toLocaleString() : 'N/A'}</span></div>
+                        <div><strong>Completed:</strong> <span>${scan.completed ? new Date(scan.completed).toLocaleString() : 'N/A'}</span></div>
+                    </div>
+                    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                        <h4 class="font-semibold mb-2">Failure Reason</h4>
+                        <pre class="whitespace-pre-wrap break-all text-xs max-h-24 overflow-auto">${scan.failureReason ? JSON.stringify(scan.failureReason, null, 2) : 'None'}</pre>
+                    </div>
+                `;
+            }
+
+            // Fetch and render matches
+            api.run('listDatasetMatches', { scanId: scanId }).then(matchesRes => {
+                if (!matchesRes.success) throw new Error(matchesRes.message);
+                renderDatasetMatches(matchesRes.data, scanId); // Assuming renderDatasetMatches exists
+            }).catch(err => {
+                showMessage(`Error loading matches: ${err.message}`, true);
+                 if (matchesBody) matchesBody.innerHTML = `<tr><td colspan="5" class="text-center text-red-500">Error loading matches.</td></tr>`;
+            });
+
+        }).catch(err => {
+            showMessage(`Error loading scan details: ${err.message}`, true);
+             if (contentDiv) contentDiv.innerHTML = `<p class="text-red-500">Error loading details: ${err.message}</p>`;
+        });
+    }
+
+     function resolveMatch(matchId, scanId, resolution, needsNote = false) {
+        let note = '';
+        if (needsNote) {
+            note = prompt(`Enter an optional note for this resolution (${resolution}):`, "");
+            if (note === null) return; // User cancelled
+        }
+
+        const body = { userActionNeeded: false, userActionResolution: resolution, userActionResolutionNote: note };
+        api.run('patchDatasetMatch', matchId, body).then(res => {
+            if (res.success) {
+                showMessage('Match resolved successfully.');
+                viewScanDetails(scanId); // Refresh the scan details modal
+            } else {
+                showMessage(res.message, true);
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+
+    // =================================================================
+    // Rendering Functions (specific to Monitoring and Scans)
+    // =================================================================
+
+     function renderMonitors(monitors) {
+        const tableBody = document.getElementById('monitorsTableBody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+
+        if (!monitors || monitors.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500">No monitors found.</td></tr>';
+            return;
+        }
+
+        monitors.forEach(monitor => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = monitor.id.substring(0, 8) + '...';
+            row.insertCell().textContent = monitor.type;
+             // Use providerName if available, otherwise fall back to providerId
+            const provider = state.providers.data ? state.providers.data.find(p => p.id === monitor.providerId) : null;
+            row.insertCell().textContent = provider ? `${provider.firstName} ${provider.lastName}` : monitor.providerId || 'N/A';
+
+            row.insertCell().textContent = monitor.datasetType || monitor.licenseId || 'N/A';
+            row.insertCell().textContent = monitor.monitoringInterval;
+            row.insertCell().textContent = monitor.nextMonitoringDate ? new Date(monitor.nextMonitoringDate).toLocaleDateString() : 'N/A';
+            row.insertCell().textContent = monitor.lastMonitoringDate ? new Date(monitor.lastMonitoringDate).toLocaleDateString() : 'N/A';
+
+            const monitorJson = encodeURIComponent(JSON.stringify(monitor));
+            row.insertCell().innerHTML = `<button onclick='editMonitor("${monitorJson}")' class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        });
+    }
+
+    function editMonitor(monitorJson) {
+        const monitor = JSON.parse(decodeURIComponent(monitorJson));
+         const monitorId = document.getElementById('monitorId');
+         const monitorType = document.getElementById('monitorType');
+         const monitorProviderId = document.getElementById('monitorProviderId');
+         const monitorDatasetType = document.getElementById('monitorDatasetType');
+         const monitorLicenseId = document.getElementById('monitorLicenseId');
+         const monitorInterval = document.getElementById('monitorInterval');
+
+        if (monitorId) monitorId.value = monitor.id;
+        if (monitorType) monitorType.value = monitor.type;
+        if (monitorProviderId) monitorProviderId.value = monitor.providerId;
+        if (monitorDatasetType) monitorDatasetType.value = monitor.datasetType || '';
+        if (monitorLicenseId) monitorLicenseId.value = monitor.licenseId || '';
+        if (monitorInterval) monitorInterval.value = monitor.monitoringInterval;
+
+
+        // Disable fields that define the monitor's core identity
+         if (monitorType) monitorType.disabled = true;
+         if (monitorProviderId) monitorProviderId.disabled = true;
+         if (monitorDatasetType) monitorDatasetType.disabled = true;
+         if (monitorLicenseId) monitorLicenseId.disabled = true;
+
+
+        toggleMonitorFields(); // Ensure correct fields are visible based on type
+        if (monitor.type === 'License' && monitor.licenseId) {
+            // If editing a license monitor, populate license dropdown for this provider specifically
+            populateMonitorLicenseDropdown(monitor.providerId).then(() => {
+                if (monitorLicenseId) monitorLicenseId.value = monitor.licenseId; // Set value after populating
+            });
+        } else {
+             // If editing a dataset monitor or new license monitor, just set the value if it exists
+             if (monitorLicenseId) monitorLicenseId.value = monitor.licenseId || '';
+        }
+
+        window.scrollTo(0, 0); // Scroll to top to see the form
+    }
+
+    function renderDatasetScans(scans) {
+        const tableBody = document.getElementById('datasetScansTableBody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+
+        if (!scans || scans.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500">No dataset scans found.</td></tr>';
+            return;
+        }
+
+        scans.forEach(scan => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = scan.id.substring(0, 8) + '...';
+            row.insertCell().textContent = scan.type;
+            // Use entityName if available, otherwise fall back to providerId/facilityId
+             const entityName = scan.entityName || (scan.providerId || scan.facilityId ? (scan.providerId || scan.facilityId).substring(0, 8) + '...' : 'N/A');
+            row.insertCell().textContent = entityName;
+
+            row.insertCell().textContent = scan.status;
+            row.insertCell().textContent = scan.started ? new Date(scan.started).toLocaleString() : 'N/A';
+            row.insertCell().textContent = scan.completed ? new Date(scan.completed).toLocaleString() : 'N/A';
+            row.insertCell().textContent = scan.trigger || 'N/A';
+
+            row.insertCell().innerHTML = `<button onclick="viewScanDetails('${scan.id}')" class="text-blue-500 hover:underline text-xs">View Details</button>`;
+        });
+    }
+
+     function renderDatasetMatches(matches, scanId) {
+        const tableBody = document.getElementById('datasetMatchesTableBody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        if (!matches || matches.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500">No matches found for this scan.</td></tr>';
+            return;
+        }
+
+        matches.forEach(match => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = match.datasetType;
+            row.insertCell().textContent = match.status;
+
+            const descriptionCell = row.insertCell();
+            descriptionCell.innerHTML = `<pre class="text-xs whitespace-pre-wrap break-all max-h-16 overflow-auto">${match.description || 'N/A'}</pre>`;
+
+            const rawDataCell = row.insertCell();
+            rawDataCell.innerHTML = `<pre class="text-xs whitespace-pre-wrap break-all max-h-16 overflow-auto">${match.rawData ? JSON.stringify(match.rawData, null, 2) : 'N/A'}</pre>`;
+
+            const actionsCell = row.insertCell();
+             if (match.userActionNeeded) {
+                actionsCell.innerHTML = `
+                    <button onclick="resolveMatch('${match.id}', '${scanId}', 'Resolved', true)" class="btn-primary text-xs px-2 py-1 mr-2">Resolve</button>
+                    <button onclick="resolveMatch('${match.id}', '${scanId}', 'Ignore')" class="btn-secondary text-xs px-2 py-1">Ignore</button>
+                `;
+            } else {
+                 actionsCell.textContent = match.userActionResolution || 'No action needed';
+                 if (match.userActionResolutionNote) {
+                    actionsCell.title = `Note: ${match.userActionResolutionNote}`;
+                 }
+            }
+        });
+    }
+
+
+</script>

@@ -1,0 +1,79 @@
+<script>
+    /**
+     * Loads audit log entries.
+     * @param {number} [page=1] - The page number to load.
+     */
+    function loadEventLogEntries(page = 1) {
+        state.auditLog.currentPage = page;
+        const auditLogSearch = document.getElementById('auditLogSearch');
+        state.auditLog.searchTerm = auditLogSearch ? auditLogSearch.value : ''; // Null check
+        const auditLogTypeFilter = document.getElementById('auditLogTypeFilter');
+        state.auditLog.typeFilter = auditLogTypeFilter ? auditLogTypeFilter.value : ''; // Null check
+
+        const tableBody = document.getElementById('auditLogTableBody');
+        if (tableBody) { // Null check
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Loading audit log...</td></tr>';
+        }
+
+        const options = {
+            page: state.auditLog.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.auditLog.searchTerm,
+            typeFilter: state.auditLog.typeFilter,
+            sortBy: state.auditLog.sortBy,
+            sortOrder: state.auditLog.sortOrder
+        };
+
+        api.run('listEventLogEntries', options).then(response => {
+            if (response.success) {
+                renderEventLogEntries(response.data);
+                renderPagination('auditLog', state.auditLog.currentPage, config.pageSize, response.totalRecords);
+            } else {
+                showMessage(response.message, true);
+                if (tableBody) { // Null check
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+            }
+        }).catch(err => showMessage(err.message, true));
+    }
+
+    /**
+     * Renders the audit log table body.
+     * @param {Array<object>} logs - The array of log entries.
+     */
+    function renderEventLogEntries(logs) {
+        const tableBody = document.getElementById('auditLogTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500">No audit log entries found.</td></tr>';
+            return;
+        }
+        logs.forEach(log => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = new Date(log.timestamp).toLocaleString();
+
+            const typeCell = row.insertCell();
+            typeCell.textContent = log.type;
+            if (log.type === 'Error') {
+                typeCell.className = 'font-semibold text-red-600';
+            } else if (log.type === 'Request') {
+                typeCell.className = 'font-semibold text-blue-600';
+            }
+
+            row.insertCell().textContent = log.message;
+
+            const contextCell = row.insertCell();
+            if (log.context && Object.keys(log.context).length > 0) {
+                try {
+                    contextCell.innerHTML = `
+                        <pre class="text-xs bg-gray-100 p-2 rounded-md max-h-24 overflow-auto">${JSON.stringify(log.context, null, 2)}</pre>
+                    `;
+                } catch (e) {
+                    contextCell.textContent = String(log.context);
+                }
+            }
+        });
+    }
+</script>

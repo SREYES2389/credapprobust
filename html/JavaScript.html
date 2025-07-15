@@ -1,0 +1,3492 @@
+// =================================================================
+// 3. INITIALIZATION
+// =================================================================
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+/**
+* Main entry point for the application. Loads all initial data.
+*/
+function initializeApp() {
+loadCurrentUser(); // Load user info first
+loadDashboard();
+loadMyTasks(); // Load user-specific tasks
+loadProviders(1);
+loadFacilities(1);
+loadGroups();
+populateEnrollmentDropdowns();
+loadMonitors(1);
+populateMonitorDropdowns();
+loadCredentialingRequests();
+loadUsers();
+loadProviderStatusReport();
+loadRequestStatusReport();
+loadDatasetScans(1);
+loadAlerts(1);
+loadDatasetScans();
+loadWebhooks();
+loadFiles(1);
+loadProfileImportSources(); // Load sources on app start
+loadProfileImports(1); // Load initial list of imports
+loadProviderLicenses(1); // NEW: Load all licenses for the new tab
+loadLicenseTypeFilterDropdown(); // NEW: Load license types for filtering
+loadFacilityTaxonomies(); // NEW: Load taxonomies for forms
+loadRequestOwnersFilter();
+}
+
+/**
+* Fetches the current user's info and updates the UI.
+*/
+async function loadCurrentUser() {
+try {
+const user = await api.run('getCurrentUser');
+if (user && user.email) {
+state.currentUser = user;
+const welcomeMessage = document.getElementById('welcomeMessage');
+if (welcomeMessage) {
+welcomeMessage.textContent = `Welcome, ${user.name || user.email}!`;
+}
+}
+} catch (err) {
+// Fail silently, user might be anonymous
+console.log('Could not retrieve current user info.');
+}
+}
+/**
+* Populates the provider dropdown for dataset scans.
+*/
+function populateScanProviderDropdown() {
+const select = document.getElementById('scanProviderSelect');
+// Check if the element exists before trying to access its properties
+if (select) {
+select.innerHTML = '<option value="">-- Select a Provider --</option>';
+state.providers.data.forEach(p => select.innerHTML += `<option value="${p.id}">${p.firstName} ${p.lastName}</option>`);
+}
+}
+
+/**
+* Loads all available facility taxonomies and stores them in the state.
+*/
+async function loadFacilityTaxonomies() {
+try {
+const res = await api.run('listFacilityTaxonomies');
+if (res.success) {
+state.facilityTaxonomies = res.data;
+} else {
+showMessage(`Failed to load facility taxonomies: ${res.message}`, true);
+}
+} catch (err) { showMessage(`Error loading facility taxonomies: ${err.message}`, true); }
+}
+
+/**
+* Loads the unique owners of credentialing requests for the filter dropdown.
+*/
+async function loadRequestOwnersFilter() {
+try {
+const res = await api.run('aggregateCredentialingRequestOwners');
+if (res.success) {
+state.requestOwners = res.data;
+const select = document.getElementById('requestOwnerFilter');
+select.innerHTML = '<option value="">All Owners</option>';
+res.data.forEach(owner => {
+select.innerHTML += `<option value="${owner.email}">${owner.name || owner.email}</option>`;
+});
+}
+} catch (err) { /* Fail silently, dropdown will just be empty */ }
+}
+
+// =================================================================
+// 4. UI & GENERAL FUNCTIONS
+// =================================================================
+
+/**
+* Shows a specific tab and hides others.
+* @param {string} tabName - The ID of the tab content to show.
+*/
+function showTab(tabName) {
+document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+// Find the clicked tab link by iterating through all tab links
+const clickedTabLink = Array.from(document.querySelectorAll('.tab-link')).find(link =>
+link.textContent.toLowerCase().includes(tabName.toLowerCase()));
+if (clickedTabLink) {
+clickedTabLink.classList.add('active');
+}
+const tabContent = document.getElementById(tabName);
+if (tabContent) { // Add null check for tabContent
+tabContent.classList.add('active');
+}
+}
+
+/**
+* Displays a temporary message to the user.
+* @param {string} message - The message to display.
+* @param {boolean} [isError=false] - If true, displays an error-styled box.
+*/
+function showMessage(message, isError = false) {
+const box = isError ? document.getElementById('errorBox') : document.getElementById('messageBox');
+// Add null check for the message box element
+if (box) {
+box.textContent = message;
+box.style.display = 'block';
+setTimeout(() => { box.style.display = 'none'; }, 5000);
+} else {
+// Fallback to console log if message boxes are not found (e.g., during very early init)
+console.error(`Message Box Error (isError: ): `);
+}
+}
+
+/**
+* Opens a modal dialog.
+* @param {string} modalId - The ID of the modal element to display.
+*/
+function openModal(modalId) {
+const modal = document.getElementById(modalId);
+if (modal) { // Add null check for modal
+modal.style.display = 'block';
+}
+}
+
+/**
+* Closes a modal dialog and cleans up dynamic content.
+* @param {string} modalId - The ID of the modal element to hide.
+*/
+function closeModal(modalId) {
+const modal = document.getElementById(modalId);
+if (modal) { // Add null check for modal
+modal.style.display = 'none';
+const notesSection = modal.querySelector('#requestNotesSection');
+if (notesSection) notesSection.innerHTML = '';
+// Also clear any dynamic content in the single verification modal
+if (modalId === 'singleLicenseVerificationModal') {
+const detailsContent = document.getElementById('singleVerificationDetailsContent');
+if (detailsContent) {
+detailsContent.innerHTML = '';
+}
+const resolveSection = document.getElementById('resolveVerificationSection');
+if (resolveSection) {
+resolveSection.classList.add('hidden');
+}
+}
+}
+}
+
+/**
+* Shows a custom confirmation modal.
+* @param {string} title - The title of the confirmation dialog.
+* @param {string} message - The message to display to the user.
+* @param {Function} onConfirmCallback - The function to execute if the user confirms.
+* @param {string} [confirmButtonText='Confirm'] - Text for the confirm button.
+* @param {string} [confirmButtonClass='btn-danger'] - CSS class for the confirm button.
+*/
+function showConfirmModal(title, message, onConfirmCallback, confirmButtonText = 'Confirm', confirmButtonClass =
+'btn-danger') {
+const customConfirmModalTitle = document.getElementById('customConfirmModalTitle');
+const customConfirmModalMessage = document.getElementById('customConfirmModalMessage');
+const confirmBtn = document.getElementById('customConfirmModalConfirmBtn');
+
+if (customConfirmModalTitle) customConfirmModalTitle.textContent = title;
+if (customConfirmModalMessage) customConfirmModalMessage.textContent = message;
+if (confirmBtn) {
+confirmBtn.textContent = confirmButtonText;
+confirmBtn.className = confirmButtonClass; // Apply the class
+
+// Clear previous event listeners to prevent multiple calls
+confirmBtn.onclick = null;
+confirmBtn.onclick = () => {
+closeModal('customConfirmModal');
+onConfirmCallback();
+};
+}
+openModal('customConfirmModal');
+}
+
+/**
+* A generic success handler for API calls that perform saves or updates.
+* @param {Function} [refreshFunc] - An optional function to run on success (e.g., to reload data).
+* @param {Function} [clearFunc] - An optional function to run on success (e.g., to clear a form).
+* @returns {Function} A success handler function.
+*/
+function handleSaveResponse(refreshFunc, clearFunc) {
+return function (res) {
+if (res.success) {
+showMessage(res.message, false);
+if (refreshFunc) refreshFunc();
+if (clearFunc) clearFunc();
+} else {
+showMessage(res.message, true);
+}
+}
+}
+
+/**
+* Triggers a file download in the browser for a given CSV string.
+* @param {string} filename - The desired filename for the downloaded file (e.g., "providers.csv").
+* @param {string} csvString - The CSV data as a string.
+*/
+function downloadCsvFile(filename, csvString) {
+const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel
+const link = document.createElement('a');
+if (link.download !== undefined) { // Feature detection for download attribute
+const url = URL.createObjectURL(blob);
+link.setAttribute('href', url);
+link.setAttribute('download', filename);
+link.style.visibility = 'hidden';
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+URL.revokeObjectURL(url); // Clean up the URL object
+} else {
+// Fallback for older browsers or environments that don't support download attribute
+showMessage('Your browser does not support direct CSV download. Please copy the data manually.', true);
+}
+}
+
+// =================================================================
+// 5. FORM & INPUT HANDLING
+// =================================================================
+
+/**
+* Clears all input, select, and textarea fields within the main forms.
+*/
+function clearForm() {
+const providerId = document.getElementById('providerId');
+if (providerId) providerId.value = '';
+const firstName = document.getElementById('firstName');
+if (firstName) firstName.value = '';
+const lastName = document.getElementById('lastName');
+if (lastName) lastName.value = '';
+const npi = document.getElementById('npi');
+if (npi) npi.value = '';
+const nextCredentialingDate = document.getElementById('nextCredentialingDate');
+if (nextCredentialingDate) nextCredentialingDate.value = '';
+const credentialingStatus = document.getElementById('credentialingStatus');
+if (credentialingStatus) credentialingStatus.value = 'Data Collection';
+const deactivated = document.getElementById('deactivated');
+if (deactivated) deactivated.checked = false;
+}
+function clearFacilityForm() {
+const facilityId = document.getElementById('facilityId');
+if (facilityId) facilityId.value = '';
+const facilityName = document.getElementById('facilityName');
+if (facilityName) facilityName.value = '';
+const facilityDba = document.getElementById('facilityDba');
+if (facilityDba) facilityDba.value = '';
+const facilityAddressLine1 = document.getElementById('facilityAddressLine1');
+if (facilityAddressLine1) facilityAddressLine1.value = '';
+const facilityAddressLine2 = document.getElementById('facilityAddressLine2');
+if (facilityAddressLine2) facilityAddressLine2.value = '';
+const facilityCity = document.getElementById('facilityCity');
+if (facilityCity) facilityCity.value = '';
+const facilityState = document.getElementById('facilityState');
+if (facilityState) facilityState.value = '';
+const facilityZipCode = document.getElementById('facilityZipCode');
+if (facilityZipCode) facilityZipCode.value = '';
+const facilityPhoneNumber = document.getElementById('facilityPhoneNumber');
+if (facilityPhoneNumber) facilityPhoneNumber.value = '';
+const facilityFaxNumber = document.getElementById('facilityFaxNumber');
+if (facilityFaxNumber) facilityFaxNumber.value = '';
+const facilityContactName = document.getElementById('facilityContactName');
+if (facilityContactName) facilityContactName.value = '';
+const facilityContactEmail = document.getElementById('facilityContactEmail');
+if (facilityContactEmail) facilityContactEmail.value = '';
+const facilityDeactivated = document.getElementById('facilityDeactivated');
+if (facilityDeactivated) facilityDeactivated.checked = false;
+}
+function clearGroupForm() {
+const groupId = document.getElementById('groupId');
+if (groupId) groupId.value = '';
+const groupName = document.getElementById('groupName');
+if (groupName) groupName.value = '';
+const groupNpi = document.getElementById('groupNpi');
+if (groupNpi) groupNpi.value = '';
+const groupTaxId = document.getElementById('groupTaxId');
+if (groupTaxId) groupTaxId.value = '';
+}
+function clearPayerForm() {
+const payerId = document.getElementById('payerId');
+if (payerId) payerId.value = '';
+const payerName = document.getElementById('payerName');
+if (payerName) payerName.value = '';
+}
+function clearPayerPlanForm() {
+const planId = document.getElementById('planId');
+if (planId) planId.value = '';
+const planName = document.getElementById('planName');
+if (planName) planName.value = '';
+const planState = document.getElementById('planState');
+if (planState) planState.value = '';
+}
+function clearEnrollmentForm() {
+const enrollmentId = document.getElementById('enrollmentId');
+if (enrollmentId) enrollmentId.value = '';
+const enrollmentGroupId = document.getElementById('enrollmentGroupId');
+if (enrollmentGroupId) enrollmentGroupId.value = '';
+const enrollmentPayerPlanId = document.getElementById('enrollmentPayerPlanId');
+if (enrollmentPayerPlanId) enrollmentPayerPlanId.value = '';
+const effectiveDate = document.getElementById('effectiveDate');
+if (effectiveDate) effectiveDate.value = '';
+const enrollmentStatus = document.getElementById('enrollmentStatus');
+if (enrollmentStatus) enrollmentStatus.value = 'NotSubmitted';
+const networkStatus = document.getElementById('networkStatus');
+if (networkStatus) networkStatus.value = 'None';
+const specialistType = document.getElementById('specialistType');
+if (specialistType) specialistType.value = 'None';
+const submissionDate = document.getElementById('submissionDate');
+if (submissionDate) submissionDate.value = '';
+const closedDate = document.getElementById('closedDate');
+if (closedDate) closedDate.value = '';
+const externalProviderPlanId = document.getElementById('externalProviderPlanId');
+if (externalProviderPlanId) externalProviderPlanId.value = '';
+const enrollmentComments = document.getElementById('enrollmentComments');
+if (enrollmentComments) enrollmentComments.value = '';
+}
+function clearWebhookForm() {
+const webhookId = document.getElementById('webhookId');
+if (webhookId) webhookId.value = '';
+const webhookType = document.getElementById('webhookType');
+if (webhookType) webhookType.value = '';
+const webhookUrl = document.getElementById('webhookUrl');
+if (webhookUrl) webhookUrl.value = '';
+const webhookSecret = document.getElementById('webhookSecret');
+if (webhookSecret) webhookSecret.value = '';
+const webhookAllowInsecure = document.getElementById('webhookAllowInsecure');
+if (webhookAllowInsecure) webhookAllowInsecure.checked = false;
+const webhookIncludeSensitive = document.getElementById('webhookIncludeSensitive');
+if (webhookIncludeSensitive) webhookIncludeSensitive.checked = false;
+}
+
+/**
+* Debounces search input to prevent excessive API calls.
+* @param {string} type - The type of entity being searched ('provider', 'facility', 'notes').
+*/
+function handleSearch(type) {
+clearTimeout(searchTimeout);
+searchTimeout = setTimeout(() => {
+if (type === 'provider') loadProviders(1);
+else if (type === 'facility') loadFacilities(1);
+else if (type === 'notes') loadAllNotes(1);
+else if (type === 'auditLog') loadEventLogEntries(1);
+else if (type === 'profileImports') loadProfileImports(1);
+else if (type === 'alerts') loadAlerts(1);
+else if (type === 'datasetScans') loadDatasetScans(1);
+else if (type === 'files') loadFiles(1);
+else if (type === 'monitors') loadMonitors(1);
+else if (type === 'licenses') loadProviderLicenses(1); // NEW
+else if (type === 'requests') loadCredentialingRequests(1);
+}, config.searchDebounce);
+}
+
+/**
+* Filters rows of a table inside a modal based on user input.
+* This is a client-side filter for already-rendered data.
+* @param {string} inputId - The ID of the input element for the filter text.
+* @param {string} tableId - The ID of the table to filter.
+*/
+function filterModalTable(inputId, tableId) {
+const input = document.getElementById(inputId);
+const table = document.getElementById(tableId);
+if (!input || !table) return;
+
+const filter = input.value.toUpperCase();
+const tr = table.getElementsByTagName("tr");
+
+for (let i = 1; i < tr.length; i++) { // Start from 1 to skip header row const row=tr[i]; const txtValue=row.textContent
+    || row.innerText; if (txtValue.toUpperCase().indexOf(filter)> -1) {
+    row.style.display = "";
+    } else {
+    row.style.display = "none";
+    }
+    }
+    }
+
+    // =================================================================
+    // 6. DATA HANDLERS (CRUD & LISTING)
+    // =================================================================
+
+    // --- Provider Handlers ---
+    function addProvider() {
+    const firstName = document.getElementById('firstName');
+    const lastName = document.getElementById('lastName');
+    const npi = document.getElementById('npi');
+    const nextCredentialingDate = document.getElementById('nextCredentialingDate');
+    const credentialingStatus = document.getElementById('credentialingStatus');
+    const deactivated = document.getElementById('deactivated');
+
+    const providerData = {
+    firstName: firstName ? firstName.value : '',
+    lastName: lastName ? lastName.value : '',
+    npi: npi ? npi.value || null : null,
+    nextCredentialingDate: nextCredentialingDate ? nextCredentialingDate.value || null : null,
+    credentialingStatus: credentialingStatus ? credentialingStatus.value : 'Data Collection',
+    deactivated: deactivated ? deactivated.checked : false
+    };
+    if (!providerData.firstName || !providerData.lastName) { showMessage('First Name and Last Name are required.',
+    true); return; }
+    api.run('createProvider', providerData).then(handleSaveResponse(() => loadProviders(1), clearForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    function updateProvider() {
+    const id = document.getElementById('providerId');
+    if (!id || !id.value) { showMessage('Provider ID is required to update.', true); return; }
+    const firstName = document.getElementById('firstName');
+    const lastName = document.getElementById('lastName');
+    const npi = document.getElementById('npi');
+    const nextCredentialingDate = document.getElementById('nextCredentialingDate');
+    const credentialingStatus = document.getElementById('credentialingStatus');
+    const deactivated = document.getElementById('deactivated');
+
+    const providerData = {
+    id: id.value,
+    firstName: firstName ? firstName.value : '',
+    lastName: lastName ? lastName.value : '',
+    npi: npi ? npi.value || null : null,
+    nextCredentialingDate: nextCredentialingDate ? nextCredentialingDate.value || null : null,
+    credentialingStatus: credentialingStatus ? credentialingStatus.value : 'Data Collection',
+    deactivated: deactivated ? deactivated.checked : false
+    };
+    api.run('updateProvider', providerData).then(handleSaveResponse(() => loadProviders(state.providers.currentPage),
+    clearForm)).catch(err => showMessage(err.message, true));
+    }
+    function deleteProvider() {
+    const id = document.getElementById('providerId');
+    if (!id || !id.value) { showMessage('Provider ID is required to delete.', true); return; }
+    showConfirmModal(
+    'Delete Provider',
+    `Are you sure you want to delete provider ${id.value} and all associated data? This action cannot be undone.`,
+    () => {
+    api.run('deleteProvider', id.value).then(handleSaveResponse(() => loadProviders(1), clearForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    );
+    }
+    function loadProviders(page = 1) {
+    state.providers.currentPage = page;
+    const providerSearch = document.getElementById('providerSearch');
+    state.providers.searchTerm = providerSearch ? providerSearch.value : ''; // Null check
+    if (page === 1) { populateScanProviderDropdown(); }
+    const providerTableBody = document.getElementById('providerTableBody');
+    if (providerTableBody) { // Null check
+    providerTableBody.innerHTML = '<tr>
+        <td colspan="9" class="text-center">Loading providers...</td>
+    </tr>';
+    }
+    const options = { page: state.providers.currentPage, pageSize: config.pageSize, searchTerm:
+    state.providers.searchTerm, sortBy: state.providers.sortBy, sortOrder: state.providers.sortOrder };
+    api.run('getProviders', options).then(response => {
+    if (response.success) {
+    state.providers.data = response.data; // Update state
+    renderProviders(response.data);
+    renderPagination('provider', state.providers.currentPage, config.pageSize, response.totalRecords);
+    if (page === 1) populateScanProviderDropdown(); // Populate dropdown after data is loaded
+    } else {
+    showMessage(response.message, true);
+    if (providerTableBody) { // Null check
+    providerTableBody.innerHTML = `<tr>
+        <td colspan="9" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const providerPagination = document.getElementById('providerPagination');
+    if (providerPagination) { // Null check
+    providerPagination.innerHTML = '';
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+    function bulkUpdateProviders() {
+    const providerIds = Array.from(document.querySelectorAll('.provider-checkbox:checked')).map(cb => cb.value);
+    const bulkUpdateStatus = document.getElementById('bulkUpdateStatus');
+    const newStatus = bulkUpdateStatus ? bulkUpdateStatus.value : ''; // Null check
+    if (providerIds.length === 0 || !newStatus) { showMessage('Please select providers and a new status.', true);
+    return; }
+    showConfirmModal(
+    'Bulk Update Providers',
+    `Are you sure you want to update the status to "${newStatus}" for ${providerIds.length} selected providers?`,
+    () => {
+    api.run('bulkUpdateProviderStatus', providerIds, newStatus).then(res => {
+    if (res.success) { showMessage(res.message); loadProviders(state.providers.currentPage); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    // --- Facility Handlers ---
+    function addFacility() {
+    const facilityName = document.getElementById('facilityName');
+    const facilityDba = document.getElementById('facilityDba');
+    const facilityAddressLine1 = document.getElementById('facilityAddressLine1');
+    const facilityAddressLine2 = document.getElementById('facilityAddressLine2');
+    const facilityCity = document.getElementById('facilityCity');
+    const facilityState = document.getElementById('facilityState');
+    const facilityZipCode = document.getElementById('facilityZipCode');
+    const facilityPhoneNumber = document.getElementById('facilityPhoneNumber');
+    const facilityFaxNumber = document.getElementById('facilityFaxNumber');
+    const facilityContactName = document.getElementById('facilityContactName');
+    const facilityContactEmail = document.getElementById('facilityContactEmail');
+    const facilityDeactivated = document.getElementById('facilityDeactivated');
+
+    const facilityData = {
+    name: facilityName ? facilityName.value : '',
+    dba: facilityDba ? facilityDba.value : '',
+    addressLine1: facilityAddressLine1 ? facilityAddressLine1.value : '',
+    addressLine2: facilityAddressLine2 ? facilityAddressLine2.value : '',
+    city: facilityCity ? facilityCity.value : '',
+    state: facilityState ? facilityState.value : '',
+    zipCode: facilityZipCode ? facilityZipCode.value : '',
+    phoneNumber: facilityPhoneNumber ? facilityPhoneNumber.value : '',
+    faxNumber: facilityFaxNumber ? facilityFaxNumber.value : '',
+    contactName: facilityContactName ? facilityContactName.value : '',
+    contactEmail: facilityContactEmail ? facilityContactEmail.value : '',
+    deactivated: facilityDeactivated ? facilityDeactivated.checked : false
+    };
+    if (!facilityData.name) { showMessage('Facility Name is required.', true); return; }
+    api.run('createFacility', facilityData).then(handleSaveResponse(() => loadFacilities(1),
+    clearFacilityForm)).catch(err => showMessage(err.message, true));
+    }
+    function updateFacility() {
+    const id = document.getElementById('facilityId');
+    if (!id || !id.value) { showMessage('Facility ID is required to update.', true); return; }
+    const facilityName = document.getElementById('facilityName');
+    const facilityDba = document.getElementById('facilityDba');
+    const facilityAddressLine1 = document.getElementById('facilityAddressLine1');
+    const facilityAddressLine2 = document.getElementById('facilityAddressLine2');
+    const facilityCity = document.getElementById('facilityCity');
+    const facilityState = document.getElementById('facilityState');
+    const facilityZipCode = document.getElementById('facilityZipCode');
+    const facilityPhoneNumber = document.getElementById('facilityPhoneNumber');
+    const facilityFaxNumber = document.getElementById('facilityFaxNumber');
+    const facilityContactName = document.getElementById('facilityContactName');
+    const facilityContactEmail = document.getElementById('facilityContactEmail');
+    const facilityDeactivated = document.getElementById('facilityDeactivated');
+
+    const facilityData = {
+    id: id.value,
+    name: facilityName ? facilityName.value : '',
+    dba: facilityDba ? facilityDba.value : '',
+    addressLine1: facilityAddressLine1 ? facilityAddressLine1.value : '',
+    addressLine2: facilityAddressLine2 ? facilityAddressLine2.value : '',
+    city: facilityCity ? facilityCity.value : '',
+    state: facilityState ? facilityState.value : '',
+    zipCode: facilityZipCode ? facilityZipCode.value : '',
+    phoneNumber: facilityPhoneNumber ? facilityPhoneNumber.value : '',
+    faxNumber: facilityFaxNumber ? facilityFaxNumber.value : '',
+    contactName: facilityContactName ? facilityContactName.value : '',
+    contactEmail: facilityContactEmail ? facilityContactEmail.value : '',
+    deactivated: facilityDeactivated ? facilityDeactivated.checked : false
+    };
+    api.run('updateFacility', facilityData).then(handleSaveResponse(() => loadFacilities(state.facilities.currentPage),
+    clearFacilityForm)).catch(err => showMessage(err.message, true));
+    }
+    function deleteFacility() {
+    const id = document.getElementById('facilityId');
+    if (!id || !id.value) { showMessage('Select a facility to delete.', true); return; }
+    showConfirmModal(
+    'Delete Facility',
+    `Are you sure you want to delete facility ${id.value} and all associated data? This action cannot be undone.`,
+    () => {
+    api.run('deleteFacility', id.value).then(handleSaveResponse(() => loadFacilities(1), clearFacilityForm)).catch(err
+    => showMessage(err.message, true));
+    }
+    );
+    }
+    function loadFacilities(page = 1) {
+    state.facilities.currentPage = page;
+    const facilitySearch = document.getElementById('facilitySearch');
+    state.facilities.searchTerm = facilitySearch ? facilitySearch.value : ''; // Null check
+    const facilitiesTableBody = document.getElementById('facilitiesTableBody');
+    if (facilitiesTableBody) { // Null check
+    facilitiesTableBody.innerHTML = '<tr>
+        <td colspan="6" class="text-center">Loading facilities...</td>
+    </tr>';
+    }
+    const options = { page: state.facilities.currentPage, pageSize: config.pageSize, searchTerm:
+    state.facilities.searchTerm, sortBy: state.facilities.sortBy, sortOrder: state.facilities.sortOrder };
+    api.run('getFacilities', options).then(response => {
+    if (response.success) {
+    renderFacilities(response.data);
+    renderPagination('facility', state.facilities.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    if (facilitiesTableBody) { // Null check
+    facilitiesTableBody.innerHTML = `<tr>
+        <td colspan="6" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const facilityPagination = document.getElementById('facilityPagination');
+    if (facilityPagination) { // Null check
+    facilityPagination.innerHTML = '';
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- Group Handlers ---
+    function addGroup() {
+    const groupName = document.getElementById('groupName').value;
+    const groupNpi = document.getElementById('groupNpi').value;
+    const groupTaxId = document.getElementById('groupTaxId').value;
+    if (!groupName) { showMessage('Group Name is required.', true); return; }
+    const groupData = { name: groupName, npi: groupNpi, taxId: groupTaxId };
+    api.run('createGroup', groupData).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    function updateGroup() {
+    const id = document.getElementById('groupId').value;
+    if (!id) { showMessage('Group ID is required to update.', true); return; }
+    const groupName = document.getElementById('groupName').value;
+    const groupNpi = document.getElementById('groupNpi').value;
+    const groupTaxId = document.getElementById('groupTaxId').value;
+    const groupData = { id: id, name: groupName, npi: groupNpi, taxId: groupTaxId };
+    api.run('updateGroup', groupData).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    function deleteGroup() {
+    const id = document.getElementById('groupId').value;
+    if (!id) { showMessage('Select a group to delete.', true); return; }
+    showConfirmModal(
+    'Delete Group',
+    `Are you sure you want to delete group ${id} and all its relationships? This action cannot be undone.`,
+    () => {
+    api.run('deleteGroup', id).then(handleSaveResponse(loadGroups, clearGroupForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    );
+    }
+    function loadGroups() {
+    const tableBody = document.getElementById('groupsTableBody');
+    tableBody.innerHTML = '<tr>
+        <td colspan="5" class="text-center">Loading groups...</td>
+    </tr>';
+    api.run('listGroups').then(res => {
+    if (res.success && res.data) {
+    state.groups.data = res.data;
+    renderGroups(state.groups.data);
+    } else {
+    showMessage(res.message, true);
+    tableBody.innerHTML = '<tr>
+        <td colspan="5" class="text-center">No groups found.</td>
+    </tr>';
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+
+    // --- Payer & Enrollment Handlers ---
+    function savePayer() {
+    const id = document.getElementById('payerId');
+    const payerName = document.getElementById('payerName');
+    const payerData = {
+    id: id ? id.value : '',
+    name: payerName ? payerName.value : ''
+    };
+    if (!payerData.name) { showMessage('Payer Name is required.', true); return; }
+    const apiCall = payerData.id ? api.run('updatePayer', payerData) : api.run('createPayer', payerData);
+    apiCall.then(handleSaveResponse(loadPayers, clearPayerForm)).catch(err => showMessage(err.message, true));
+    }
+    function deletePayer() {
+    const id = document.getElementById('payerId');
+    if (!id || !id.value) { showMessage('Select a payer to delete.', true); return; }
+    showConfirmModal(
+    'Delete Payer',
+    `Are you sure you want to delete payer ${id.value} and all associated plans and enrollments? This action cannot be
+    undone.`,
+    () => {
+    api.run('deletePayer', id.value).then(handleSaveResponse(loadPayers, clearPayerForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    );
+    }
+    function loadPayers() {
+    api.run('listPayers').then(res => {
+    if (res.success) { state.payers = res.data; renderPayers(state.payers); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    function savePayerPlan() {
+    const id = document.getElementById('planId');
+    const planPayerId = document.getElementById('planPayerId');
+    const planName = document.getElementById('planName');
+    const planState = document.getElementById('planState');
+
+    const planData = {
+    id: id ? id.value : '',
+    payerId: planPayerId ? planPayerId.value : '',
+    name: planName ? planName.value : '',
+    state: planState ? planState.value : ''
+    };
+    if (!planData.payerId || !planData.name) { showMessage('Payer ID and Plan Name are required.', true); return; }
+    const refreshFunc = () => loadPayerPlans(planData.payerId);
+    const apiCall = planData.id ? api.run('updatePayerPlan', planData) : api.run('createPayerPlan', planData);
+    apiCall.then(handleSaveResponse(refreshFunc, clearPayerPlanForm)).catch(err => showMessage(err.message, true));
+    }
+    function deletePayerPlan() {
+    const id = document.getElementById('planId');
+    const payerId = document.getElementById('planPayerId');
+    if (!id || !id.value) { showMessage('Select a plan to delete.', true); return; }
+    showConfirmModal(
+    'Delete Payer Plan',
+    `Are you sure you want to delete this plan ${id.value} and all associated enrollments? This action cannot be
+    undone.`,
+    () => {
+    const refreshFunc = () => loadPayerPlans(payerId ? payerId.value : '');
+    api.run('deletePayerPlan', id.value).then(handleSaveResponse(refreshFunc, clearPayerPlanForm)).catch(err =>
+    showMessage(err.message, true));
+    }
+    );
+    }
+    function loadPayerPlans(payerId) {
+    api.run('listPayerPlans', payerId).then(res => {
+    if (res.success) renderPayerPlans(res.data);
+    }).catch(err => showMessage(err.message, true));
+    }
+    function saveProviderEnrollment() {
+    const enrollmentId = document.getElementById('enrollmentId');
+    const enrollmentProviderId = document.getElementById('enrollmentProviderId');
+    const enrollmentGroupId = document.getElementById('enrollmentGroupId');
+    const enrollmentPayerPlanId = document.getElementById('enrollmentPayerPlanId');
+    const effectiveDate = document.getElementById('effectiveDate');
+    const enrollmentStatus = document.getElementById('enrollmentStatus');
+    const networkStatus = document.getElementById('networkStatus');
+    const specialistType = document.getElementById('specialistType');
+    const submissionDate = document.getElementById('submissionDate');
+    const closedDate = document.getElementById('closedDate');
+    const externalProviderPlanId = document.getElementById('externalProviderPlanId');
+    const enrollmentComments = document.getElementById('enrollmentComments');
+
+    const enrollmentData = {
+    id: enrollmentId ? enrollmentId.value : '',
+    providerId: enrollmentProviderId ? enrollmentProviderId.value : '',
+    groupId: enrollmentGroupId ? enrollmentGroupId.value : '',
+    payerPlanId: enrollmentPayerPlanId ? enrollmentPayerPlanId.value : '',
+    effectiveDate: effectiveDate ? effectiveDate.value : '',
+    enrollmentStatus: enrollmentStatus ? enrollmentStatus.value : 'NotSubmitted',
+    networkStatus: networkStatus ? networkStatus.value : 'None',
+    specialistType: specialistType ? specialistType.value : 'None',
+    submissionDate: submissionDate ? submissionDate.value : '',
+    closedDate: closedDate ? closedDate.value : '',
+    externalProviderPlanId: externalProviderPlanId ? externalProviderPlanId.value : '',
+    comments: enrollmentComments ? enrollmentComments.value : ''
+    };
+    if (!enrollmentData.providerId || !enrollmentData.groupId || !enrollmentData.payerPlanId) { showMessage('Provider,
+    Group, and Payer Plan are required.', true); return; }
+    const refreshFunc = () => loadProviderEnrollments();
+    const apiCall = enrollmentData.id ? api.run('updateProviderEnrollment', enrollmentData) :
+    api.run('createProviderEnrollment', enrollmentData);
+    apiCall.then(handleSaveResponse(refreshFunc, clearEnrollmentForm)).catch(err => showMessage(err.message, true));
+    }
+    function deleteProviderEnrollment() {
+    const id = document.getElementById('enrollmentId');
+    if (!id || !id.value) { showMessage('Select an enrollment to delete.', true); return; }
+    showConfirmModal(
+    'Delete Enrollment',
+    `Are you sure you want to delete this enrollment ${id.value}? This action cannot be undone.`,
+    () => {
+    api.run('deleteProviderEnrollment', id.value).then(handleSaveResponse(loadProviderEnrollments,
+    clearEnrollmentForm)).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+    function loadProviderEnrollments() {
+    const enrollmentProviderId = document.getElementById('enrollmentProviderId');
+    const providerId = enrollmentProviderId ? enrollmentProviderId.value : ''; // Null check
+    const providerEnrollmentsTableBody = document.getElementById('providerEnrollmentsTableBody');
+    if (!providerId) {
+    if (providerEnrollmentsTableBody) { // Null check
+    providerEnrollmentsTableBody.innerHTML = '<tr>
+        <td colspan="7" class="text-center">Select a provider to view enrollments.</td>
+    </tr>';
+    }
+    return;
+    }
+    api.run('listProviderEnrollments', providerId).then(res => {
+    if (res.success) renderProviderEnrollments(res.data);
+    }).catch(err => showMessage(err.message, true));
+    }
+    function populateEnrollmentDropdowns() {
+    api.run('listGroups').then(res => {
+    if (res.success) {
+    const select = document.getElementById('enrollmentGroupId');
+    if (select) { // Null check
+    select.innerHTML = '<option value="">Select a Group</option>';
+    res.data.forEach(group => { select.innerHTML += `<option value="${group.id}">${group.name}</option>`; });
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    api.run('listPayerPlans', null).then(res => {
+    if (res.success) {
+    const select = document.getElementById('enrollmentPayerPlanId');
+    if (select) { // Null check
+    select.innerHTML = '<option value="">Select a Payer Plan</option>';
+    res.data.forEach(plan => { select.innerHTML += `<option value="${plan.id}">${plan.name} (${plan.state || 'N/A'})
+    </option>`; });
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- Credentialing Request Handlers ---
+    function loadCredentialingRequests() {
+    const page = state.credentialingRequests.currentPage;
+    state.credentialingRequests.searchTerm = document.getElementById('requestSearch').value;
+    state.credentialingRequests.filters.status = document.getElementById('requestStatusFilter').value;
+    state.credentialingRequests.filters.priority = document.getElementById('requestPriorityFilter').value;
+    state.credentialingRequests.filters.owner = document.getElementById('requestOwnerFilter').value;
+
+    const tableBody = document.getElementById('credentialingRequestsTableBody');
+    tableBody.innerHTML = '<tr>
+        <td colspan="7" class="text-center">Loading requests...</td>
+    </tr>';
+
+    const options = {
+    page: page,
+    pageSize: config.pageSize,
+    searchTerm: state.credentialingRequests.searchTerm,
+    statusFilter: state.credentialingRequests.filters.status,
+    priorityFilter: state.credentialingRequests.filters.priority,
+    ownerFilter: state.credentialingRequests.filters.owner,
+    sortBy: 'createdAt',
+    sortOrder: 'desc'
+    };
+
+    api.run('listCredentialingRequests', options).then(response => {
+    if (response.success) {
+    state.credentialingRequests.data = response.data;
+    state.credentialingRequests.totalRecords = response.totalRecords;
+    renderCredentialingRequests(response.data);
+    renderPagination('credentialingRequests', page, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    tableBody.innerHTML = `<tr>
+        <td colspan="7" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    function createRequestFromModal(entityType, entityId) {
+    showConfirmModal(
+    'Create Credentialing Request',
+    `Are you sure you want to create a new credentialing request for this ${entityType}?`,
+    () => {
+    const requestData = { type: 'Initial', priority: 'Medium' };
+    if (entityType === 'provider') requestData.providerId = entityId;
+    else if (entityType === 'facility') requestData.facilityId = entityId;
+    else { showMessage('Invalid entity type for request.', true); return; }
+    api.run('createCredentialingRequest', requestData).then(res => {
+    if (res.success) { showMessage(res.message, false); closeModal('providerDetailsModal');
+    closeModal('facilityDetailsModal'); loadCredentialingRequests(); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    function assignOwner(requestId) {
+    const modalRequestOwner = document.getElementById('modalRequestOwner');
+    const newOwnerEmail = modalRequestOwner ? modalRequestOwner.value : ''; // Null check
+    if (!newOwnerEmail) { showMessage('Please select a user to assign.', true); return; }
+    api.run('patchCredentialingRequest', requestId, { ownerId: newOwnerEmail }).then(res => {
+    if (res.success) { showMessage(res.message); viewCredentialingRequest(requestId); loadCredentialingRequests(); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    async function openCreateRequestModal() {
+    const providerSelect = document.getElementById('newReqProviderSelect');
+    const facilitySelect = document.getElementById('newReqFacilitySelect');
+    providerSelect.innerHTML = '<option value="">Loading...</option>';
+    facilitySelect.innerHTML = '<option value="">Loading...</option>';
+    openModal('createRequestModal');
+
+    try {
+    const [providersRes, facilitiesRes] = await Promise.all([
+    api.run('getProviders', { pageSize: 1000 }),
+    api.run('getFacilities', { pageSize: 1000 })
+    ]);
+
+    providerSelect.innerHTML = '<option value="">-- Select a Provider --</option>';
+    if (providersRes.success) {
+    providersRes.data.forEach(p => providerSelect.innerHTML += `<option value="${p.id}">${p.firstName} ${p.lastName}
+    </option>`);
+    }
+
+    facilitySelect.innerHTML = '<option value="">-- Select a Facility --</option>';
+    if (facilitiesRes.success) {
+    facilitiesRes.data.forEach(f => facilitySelect.innerHTML += `<option value="${f.id}">${f.name}</option>`);
+    }
+    } catch (err) {
+    showMessage(`Error loading entities: ${err.message}`, true);
+    }
+    }
+
+    function toggleNewRequestEntitySelect() {
+    const entityType = document.getElementById('newReqEntityType').value;
+    document.getElementById('newReqProviderContainer').style.display = (entityType === 'provider') ? 'block' : 'none';
+    document.getElementById('newReqFacilityContainer').style.display = (entityType === 'facility') ? 'block' : 'none';
+    }
+
+    function saveRequestFromScratch() {
+    const entityType = document.getElementById('newReqEntityType').value;
+    const requestData = { type: 'Initial', priority: 'Medium' };
+
+    if (entityType === 'provider') {
+    requestData.providerId = document.getElementById('newReqProviderSelect').value;
+    if (!requestData.providerId) { showMessage('Please select a provider.', true); return; }
+    } else {
+    requestData.facilityId = document.getElementById('newReqFacilitySelect').value;
+    if (!requestData.facilityId) { showMessage('Please select a facility.', true); return; }
+    }
+
+    api.run('createCredentialingRequest', requestData).then(res => {
+    if (res.success) {
+    showMessage(res.message, false);
+    closeModal('createRequestModal');
+    loadCredentialingRequests(1);
+    } else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- Monitoring Handlers ---
+    function toggleMonitorFields() {
+    const monitorType = document.getElementById('monitorType').value;
+    const datasetContainer = document.getElementById('monitorDatasetTypeContainer');
+    const licenseContainer = document.getElementById('monitorLicenseIdContainer');
+    if (monitorType === 'Dataset') {
+    datasetContainer.style.display = 'block';
+    licenseContainer.style.display = 'none';
+    } else {
+    datasetContainer.style.display = 'none';
+    licenseContainer.style.display = 'block';
+    }
+    }
+
+    async function populateMonitorDropdowns() {
+    const providerSelect = document.getElementById('monitorProviderId');
+    if (!providerSelect) return;
+    providerSelect.innerHTML = '<option value="">Loading Providers...</option>';
+    try {
+    // Fetch all providers for the dropdown
+    const res = await api.run('getProviders', { pageSize: 1000, sortBy: 'lastName' });
+    if (res.success) {
+    providerSelect.innerHTML = '<option value="">-- Select Provider --</option>';
+    res.data.forEach(p => {
+    const option = document.createElement('option');
+    option.value = p.id;
+    option.textContent = `${p.lastName}, ${p.firstName} (ID: ${p.id.substring(0, 8)}...)`;
+    providerSelect.appendChild(option);
+    });
+    } else {
+    providerSelect.innerHTML = '<option value="">Error loading providers</option>';
+    showMessage(res.message, true);
+    }
+    } catch (err) {
+    providerSelect.innerHTML = '<option value="">Error loading providers</option>';
+    showMessage(err.message, true);
+    }
+    }
+
+    function clearMonitorForm() {
+    document.getElementById('monitorId').value = '';
+    document.getElementById('monitorType').value = 'Dataset';
+    document.getElementById('monitorProviderId').value = '';
+    document.getElementById('monitorDatasetType').value = 'OigExclusions';
+    document.getElementById('monitorLicenseId').value = '';
+    document.getElementById('monitorInterval').value = 'Continuous';
+
+    // Re-enable fields that might be disabled during edit
+    document.getElementById('monitorType').disabled = false;
+    document.getElementById('monitorProviderId').disabled = false;
+    document.getElementById('monitorDatasetType').disabled = false;
+    document.getElementById('monitorLicenseId').disabled = false;
+
+    toggleMonitorFields();
+    }
+
+    function addMonitor() {
+    const monitorData = {
+    type: document.getElementById('monitorType').value,
+    providerId: document.getElementById('monitorProviderId').value,
+    datasetType: document.getElementById('monitorDatasetType').value,
+    licenseId: document.getElementById('monitorLicenseId').value,
+    monitoringInterval: document.getElementById('monitorInterval').value,
+    };
+
+    if (!monitorData.providerId || !monitorData.type) {
+    showMessage('Provider and Type are required.', true);
+    return;
+    }
+    if (monitorData.type === 'Dataset' && !monitorData.datasetType) {
+    showMessage('Dataset Type is required for a Dataset monitor.', true);
+    return;
+    }
+    if (monitorData.type === 'License' && !monitorData.licenseId) {
+    showMessage('License ID is required for a License monitor.', true);
+    return;
+    }
+
+    // Clear the irrelevant field before sending
+    if (monitorData.type === 'Dataset') {
+    monitorData.licenseId = null;
+    } else {
+    monitorData.datasetType = null;
+    }
+
+    api.run('createMonitor', monitorData)
+    .then(handleSaveResponse(() => loadMonitors(1), clearMonitorForm))
+    .catch(err => showMessage(err.message, true));
+    }
+
+    function updateMonitor() {
+    const monitorId = document.getElementById('monitorId').value;
+    if (!monitorId) {
+    showMessage('Monitor ID is required to update.', true);
+    return;
+    }
+    const monitorData = {
+    monitoringInterval: document.getElementById('monitorInterval').value,
+    };
+
+    api.run('patchMonitor', monitorId, monitorData)
+    .then(handleSaveResponse(() => loadMonitors(state.monitors.currentPage), clearMonitorForm))
+    .catch(err => showMessage(err.message, true));
+    }
+
+    function deleteMonitor() {
+    const monitorId = document.getElementById('monitorId').value;
+    if (!monitorId) {
+    showMessage('Select a monitor to delete.', true);
+    return;
+    }
+    showConfirmModal(
+    'Delete Monitor',
+    `Are you sure you want to delete monitor ${monitorId}? This action cannot be undone.`,
+    () => {
+    api.run('deleteMonitor', monitorId)
+    .then(handleSaveResponse(() => loadMonitors(1), clearMonitorForm))
+    .catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    function loadMonitors(page = 1) {
+    state.monitors.currentPage = page;
+    state.monitors.searchTerm = document.getElementById('monitorSearch').value;
+    const tableBody = document.getElementById('monitorsTableBody');
+    tableBody.innerHTML = '<tr>
+        <td colspan="8" class="text-center">Loading monitors...</td>
+    </tr>';
+
+    const options = {
+    page: state.monitors.currentPage,
+    pageSize: config.pageSize,
+    searchTerm: state.monitors.searchTerm,
+    sortBy: 'nextMonitoringDate',
+    sortOrder: 'asc'
+    };
+
+    api.run('listMonitors', options).then(response => {
+    if (response.success) {
+    state.monitors.data = response.data;
+    renderMonitors(response.data);
+    renderPagination('monitors', state.monitors.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    tableBody.innerHTML = `<tr>
+        <td colspan="8" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    document.getElementById('monitorsPagination').innerHTML = '';
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    function bulkMonitorSanctions() {
+    showConfirmModal(
+    'Bulk Monitor Sanctions',
+    'This will create standard sanctions monitors (OIG, SAM, State) for all active providers who are not already being
+    monitored. This may take a moment. Continue?',
+    async () => {
+    showMessage('Initiating bulk monitoring setup...', false);
+    const providersRes = await api.run('getProviders', { pageSize: 5000 });
+    if (!providersRes.success) { showMessage(providersRes.message, true); return; }
+    const providerIds = providersRes.data.map(p => p.id);
+    const response = await api.run('bulkCreateSanctionsAndExclusionsMonitors', providerIds);
+    showMessage(response.message, !response.success);
+    if (response.success) { loadMonitors(1); }
+    }, 'Confirm & Start', 'btn-primary'
+    );
+    }
+
+    // --- Note Handlers ---
+    function loadAllNotes(page = 1) {
+    state.notes.currentPage = page;
+    const allNotesSearch = document.getElementById('allNotesSearch');
+    state.notes.searchTerm = allNotesSearch ? allNotesSearch.value : ''; // Null check
+    const allNotesTableBody = document.getElementById('allNotesTableBody');
+    if (allNotesTableBody) { // Null check
+    allNotesTableBody.innerHTML = '<tr>
+        <td colspan="5" class="text-center">Loading notes...</td>
+    </tr>';
+    }
+    const options = { page: state.notes.currentPage, pageSize: config.pageSize, searchTerm: state.notes.searchTerm };
+    api.run('listAllNotes', options).then(response => {
+    if (response.success) { state.notes.data = response.data; renderAllNotes(response.data); renderPagination('notes',
+    state.notes.currentPage, config.pageSize, response.totalRecords); }
+    else {
+    showMessage(response.message, true);
+    if (allNotesTableBody) { // Null check
+    allNotesTableBody.innerHTML = `<tr>
+        <td colspan="5" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const allNotesPagination = document.getElementById('allNotesPagination');
+    if (allNotesPagination) { // Null check
+    allNotesPagination.innerHTML = '';
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+    function addNoteToEntity(entityType, entityId) {
+    const newNoteText = document.getElementById(`newNoteText-${entityId}`);
+    const noteText = newNoteText ? newNoteText.value : ''; // Null check
+    if (!noteText || !noteText.trim()) { showMessage('Note cannot be empty.', true); return; }
+    const noteData = { entityId, entityType, noteText };
+    api.run('addNote', noteData).then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    if (entityType === 'provider') viewProviderDetails(entityId);
+    else if (entityType === 'facility') viewFacilityDetails(entityId);
+    else if (entityType === 'request') viewCredentialingRequest(entityId);
+    } else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    function saveEditedNote() {
+    const editNoteId = document.getElementById('editNoteId');
+    const editNoteText = document.getElementById('editNoteText');
+    const noteId = editNoteId ? editNoteId.value : ''; // Null check
+    const newText = editNoteText ? editNoteText.value : ''; // Null check
+    if (!newText.trim()) { showMessage('Note cannot be empty.', true); return; }
+    api.run('updateNote', noteId, newText).then(res => {
+    if (res.success) { showMessage(res.message); closeModal('editNoteModal'); loadAllNotes(state.notes.currentPage); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    function deleteNoteFromModal(noteId) {
+    showConfirmModal(
+    'Delete Note',
+    `Are you sure you want to permanently delete this note? This action cannot be undone.`,
+    () => {
+    api.run('deleteNote', noteId).then(res => {
+    if (res.success) { showMessage(res.message); loadAllNotes(state.notes.currentPage); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    // --- File Handlers ---
+    function uploadFileToEntity(entityType, entityId) {
+    const fileInput = document.getElementById(`entityFileInput-${entityId}`);
+    if (!entityId || !fileInput || fileInput.files.length === 0) { showMessage('Please select a file to upload.', true);
+    return; }
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+    const fileObject = { fileName: file.name, mimeType: file.type, data: e.target.result };
+    const uploadStatus = document.getElementById(`uploadStatus-${entityId}`);
+    if (uploadStatus) { uploadStatus.innerHTML = 'Uploading...'; }
+
+    const apiFunction = entityType === 'provider' ? 'uploadFileAndLinkToProvider' : 'uploadFileAndLinkToFacility';
+    const refreshFunction = entityType === 'provider' ? viewProviderDetails : viewFacilityDetails;
+
+    api.run(apiFunction, fileObject, entityId).then(res => {
+    if (uploadStatus) { uploadStatus.innerHTML = ''; }
+    if (res.success) { showMessage(res.message); viewProviderDetails(providerId); }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    };
+    reader.readAsDataURL(file);
+    }
+
+    function deleteFileFromModal(fileId, entityType, entityId) {
+    showConfirmModal(
+    'Delete File',
+    `Are you sure you want to permanently delete this file? This action cannot be undone.`,
+    () => {
+    if (!entityId || !entityType) {
+    showMessage('Could not determine the parent entity to refresh.', true);
+    return;
+    }
+    api.run('deleteFile', fileId).then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    // Use the correct refresh function based on the entity type
+    const refreshFunction = entityType === 'provider' ? viewProviderDetails : viewFacilityDetails;
+    if (refreshFunction) {
+    refreshFunction(entityId);
+    } else {
+    // Fallback if no refresh function is found
+    loadFiles(1);
+    }
+    } else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    // --- Other Data Loaders ---
+    function loadUsers() { api.run('listUsers').then(res => { if (res.success) state.users = res.data; else
+    showMessage(res.message, true); }).catch(err => showMessage(err.message, true)); }
+    function loadDatasetScans() { /* Stub for future implementation */ }
+
+    // --- Audit Log Handlers ---
+    function loadEventLogEntries(page = 1) {
+    state.auditLog.currentPage = page;
+    const auditLogSearch = document.getElementById('auditLogSearch');
+    state.auditLog.searchTerm = auditLogSearch ? auditLogSearch.value : ''; // Null check
+    const auditLogTypeFilter = document.getElementById('auditLogTypeFilter');
+    state.auditLog.typeFilter = auditLogTypeFilter ? auditLogTypeFilter.value : ''; // Null check
+
+    const tableBody = document.getElementById('auditLogTableBody');
+    if (tableBody) { // Null check
+    tableBody.innerHTML = '<tr>
+        <td colspan="4" class="text-center">Loading audit log...</td>
+    </tr>';
+    }
+
+    const options = {
+    page: state.auditLog.currentPage,
+    pageSize: config.pageSize,
+    searchTerm: state.auditLog.searchTerm,
+    typeFilter: state.auditLog.typeFilter,
+    sortBy: state.auditLog.sortBy,
+    sortOrder: state.auditLog.sortOrder
+    };
+
+    api.run('listEventLogEntries', options).then(response => {
+    if (response.success) {
+    renderEventLogEntries(response.data);
+    renderPagination('auditLog', state.auditLog.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- License Handlers (in Provider Modal) ---
+    function openLicenseModal(licenseJson, providerId) {
+    const license = licenseJson ? JSON.parse(decodeURIComponent(licenseJson)) : null;
+    const licenseModalProviderId = document.getElementById('licenseModalProviderId');
+    if (licenseModalProviderId) licenseModalProviderId.value = providerId;
+    const typeSelect = document.getElementById('licenseModalTypeId');
+    if (typeSelect) typeSelect.innerHTML = '<option value="">Loading types...</option>';
+
+    api.run('listSimplifiedLicenseTypes').then(res => {
+    if (res.success) {
+    if (typeSelect) { // Null check
+    typeSelect.innerHTML = '<option value="">-- Select License Type --</option>';
+    res.data.forEach(type => {
+    const option = document.createElement('option');
+    option.value = type.id;
+    option.textContent = type.name;
+    typeSelect.appendChild(option);
+    });
+    if (license) typeSelect.value = license.licenseTypeId;
+    }
+    } else {
+    if (typeSelect) { // Null check
+    typeSelect.innerHTML = `<option value="">Error loading types</option>`;
+    }
+    showMessage(res.message, true);
+    }
+    });
+
+    const licenseModalTitle = document.getElementById('licenseModalTitle');
+    const licenseModalLicenseId = document.getElementById('licenseModalLicenseId');
+    const licenseModalNumber = document.getElementById('licenseModalNumber');
+    const licenseModalState = document.getElementById('licenseModalState');
+    const licenseModalStatus = document.getElementById('licenseModalStatus');
+    const licenseModalIssueDate = document.getElementById('licenseModalIssueDate');
+    const licenseModalExpirationDate = document.getElementById('licenseModalExpirationDate');
+
+
+    if (license) {
+    if (licenseModalTitle) licenseModalTitle.textContent = 'Edit License';
+    if (licenseModalLicenseId) licenseModalLicenseId.value = license.id;
+    if (licenseModalNumber) licenseModalNumber.value = license.licenseNumber;
+    if (licenseModalState) licenseModalState.value = license.state;
+    if (licenseModalStatus) licenseModalStatus.value = license.nonVerifiedStatus || '';
+    if (licenseModalIssueDate) licenseModalIssueDate.value = license.nonVerifiedIssueDate ? new
+    Date(license.nonVerifiedIssueDate).toISOString().split('T')[0] : '';
+    if (licenseModalExpirationDate) licenseModalExpirationDate.value = license.nonVerifiedExpirationDate ? new
+    Date(license.nonVerifiedExpirationDate).toISOString().split('T')[0] : '';
+    } else {
+    if (licenseModalTitle) licenseModalTitle.textContent = 'Attach New License';
+    if (licenseModalLicenseId) licenseModalLicenseId.value = '';
+    if (licenseModalNumber) licenseModalNumber.value = '';
+    if (licenseModalState) licenseModalState.value = '';
+    if (licenseModalStatus) licenseModalStatus.value = '';
+    if (licenseModalIssueDate) licenseModalIssueDate.value = '';
+    if (licenseModalExpirationDate) licenseModalExpirationDate.value = '';
+    }
+    openModal('licenseModal');
+    }
+
+    function saveLicenseFromModal() {
+    const licenseModalProviderId = document.getElementById('licenseModalProviderId');
+    const licenseModalLicenseId = document.getElementById('licenseModalLicenseId');
+    const licenseModalTypeId = document.getElementById('licenseModalTypeId');
+    const licenseModalNumber = document.getElementById('licenseModalNumber');
+    const licenseModalState = document.getElementById('licenseModalState');
+    const licenseModalStatus = document.getElementById('licenseModalStatus');
+    const licenseModalIssueDate = document.getElementById('licenseModalIssueDate');
+    const licenseModalExpirationDate = document.getElementById('licenseModalExpirationDate');
+
+    const providerId = licenseModalProviderId ? licenseModalProviderId.value : '';
+    const licenseId = licenseModalLicenseId ? licenseModalLicenseId.value : '';
+    const licenseData = {
+    licenseTypeId: licenseModalTypeId ? licenseModalTypeId.value : '',
+    licenseNumber: licenseModalNumber ? licenseModalNumber.value : '',
+    state: licenseModalState ? licenseModalState.value : '',
+    nonVerifiedInfo: { // Ensure nonVerifiedInfo is an object
+    status: licenseModalStatus ? licenseModalStatus.value : '',
+    issueDate: licenseModalIssueDate ? licenseModalIssueDate.value : '',
+    expirationDate: licenseModalExpirationDate ? licenseModalExpirationDate.value : ''
+    }
+    // Add other optional fields like isPrimary, isCurrentlyPracticing etc. if needed
+    };
+
+    if (!licenseData.licenseTypeId || !licenseData.licenseNumber || !licenseData.state) {
+    showMessage('License Type, Number, and State are required.', true);
+    return;
+    }
+
+    const apiCall = licenseId
+    ? api.run('patchLicense', licenseId, licenseData)
+    : api.run('attachLicense', providerId, licenseData);
+
+    apiCall.then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    closeModal('licenseModal');
+    viewProviderDetails(providerId); // Refresh the main modal
+    loadProviderLicenses(state.licenses.currentPage); // Refresh the all licenses tab
+    } else {
+    showMessage(res.message, true);
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    function detachLicenseFromProvider(licenseId, providerId) {
+    showConfirmModal(
+    'Detach License',
+    `Are you sure you want to detach this license (${licenseId.substring(0, 8)}...)? This will delete the license record
+    permanently. This action cannot be undone.`,
+    () => {
+    api.run('detachLicense', providerId, licenseId).then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    viewProviderDetails(providerId); // Refresh the main modal
+    loadProviderLicenses(state.licenses.currentPage); // Refresh the all licenses tab
+    } else {
+    showMessage(res.message, true);
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    // --- Dataset Scan Handlers ---
+    function startScan() {
+    const scanProviderSelect = document.getElementById('scanProviderSelect');
+    const scanDatasetType = document.getElementById('scanDatasetType');
+    const providerId = scanProviderSelect ? scanProviderSelect.value : ''; // Null check
+    const datasetType = scanDatasetType ? scanDatasetType.value : ''; // Null check
+    if (!providerId || !datasetType) {
+    showMessage('Please select a provider and a dataset type.', true);
+    return;
+    }
+    const body = { providerId: providerId, type: datasetType };
+    showMessage(`Starting scan for provider ...`, false);
+    api.run('startDatasetScan', body).then(res => {
+    showMessage(res.message, !res.success);
+    if (res.success) {
+    loadDatasetScans(1);
+    loadAlerts(1); // Refresh alerts list
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // =================================================================
+    // 8. GENERIC MODAL HANDLERS
+    // =================================================================
+
+    /**
+    * Generates HTML for form fields based on a schema.
+    * @param {object} fields - The fields object from a form schema.
+    * @returns {string} The generated HTML string for the form fields.
+    */
+    function generateFormFields(fields) {
+    let html = '';
+    for (const [key, config] of Object.entries(fields)) {
+    const id = `dynamic-form-field-${key}`;
+    const required = config.required ? 'required' : '';
+    const colSpanClass = config.colSpan ? `md:col-span-${config.colSpan}` : 'md:col-span-1';
+    html += `<div class="${colSpanClass}">`;
+        html += `<label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${config.label}:</label>`;
+
+        if (config.type === 'select') {
+        html += `<select id="${id}" ${required} class="rounded-lg w-full">`;
+            if (config.options) { // Check if options exist
+            for (const [val, text] of Object.entries(config.options)) {
+            html += `<option value="${val}">${text}</option>`;
+            }
+            }
+            html += `</select>`;
+        } else if (config.type === 'checkbox') {
+        html += `<div class="flex items-center h-full"><input type="checkbox" id="${id}" class="rounded-md h-4 w-4">
+        </div>`;
+        } else if (config.type === 'textarea') {
+        html += `<textarea id="${id}" placeholder="${config.placeholder || ''}" ${required} rows="${config.rows || 3}"
+            class="rounded-lg w-full"></textarea>`;
+        } else {
+        html += `<input type="${config.type || 'text'}" id="${id}" placeholder="${config.placeholder || ''}" ${required}
+            class="rounded-lg w-full">`;
+        }
+        html += `</div>`;
+    }
+    return html;
+    }
+
+    /**
+    * Opens a dynamic modal, generating its form from a schema.
+    * @param {string} schemaName - The key of the schema in the formSchemas object.
+    * @param {string} parentId - The ID of the parent entity (e.g., providerId).
+    * @param {string|null} dataJson - The stringified JSON data of the entity to edit, or null for new entities.
+    */
+    function openDynamicFormModal(schemaName, parentId, dataJson) {
+    const schema = formSchemas[schemaName];
+    if (!schema) {
+    showMessage(`Error: Form schema '${schemaName}' not found.`, true);
+    return;
+    }
+
+    const entity = dataJson ? JSON.parse(decodeURIComponent(dataJson)) : null;
+
+    // Set up modal
+    document.getElementById('dynamicFormModalTitle').textContent = entity ? `Edit ${schema.title}` : `Add
+    ${schema.title}`;
+    document.getElementById('dynamicFormParentId').value = parentId;
+    document.getElementById('dynamicFormEntityId').value = entity ? entity.id : '';
+    document.getElementById('dynamicFormSchemaName').value = schemaName;
+
+    // Generate and inject fields
+    const fieldsContainer = document.getElementById('dynamicFormFieldsContainer');
+    fieldsContainer.innerHTML = generateFormFields(schema.fields);
+
+    // Populate fields with data if editing
+    if (entity) {
+    for (const [key, config] of Object.entries(schema.fields)) {
+    const element = document.getElementById(`dynamic-form-field-${key}`);
+    if (element) {
+    const value = entity[key];
+    if (config.type === 'checkbox') {
+    element.checked = value || false;
+    } else if (config.type === 'date' && value) {
+    element.value = new Date(value).toISOString().split('T')[0];
+    } else {
+    element.value = value !== undefined && value !== null ? value : '';
+    }
+    }
+    }
+    }
+
+    // Set up save button
+    const saveBtn = document.getElementById('dynamicFormSaveBtn');
+    saveBtn.textContent = `Save ${schema.title}`;
+    saveBtn.onclick = () => saveDynamicForm();
+
+    // Special handling for forms that need dynamic dropdown options
+    if (schemaName === 'facilitySpecialty') {
+    const taxonomySelect = document.getElementById('dynamic-form-field-taxonomyId');
+    if (taxonomySelect) {
+    taxonomySelect.innerHTML = ''; // Clear existing options
+    state.facilityTaxonomies.forEach(tax => {
+    const option = document.createElement('option');
+    option.value = tax.id;
+    option.textContent = `${tax.name} (${tax.code})`;
+    taxonomySelect.appendChild(option);
+    });
+    }
+    }
+
+    saveBtn.onclick = () => saveDynamicForm();
+
+    openModal('dynamicFormModal');
+    }
+
+    /**
+    * Saves data from the dynamic form modal.
+    */
+    function saveDynamicForm() {
+    const schemaName = document.getElementById('dynamicFormSchemaName').value;
+    const schema = formSchemas[schemaName];
+    if (!schema) {
+    showMessage(`Error: Form schema '${schemaName}' not found.`, true);
+    return;
+    }
+
+    const parentId = document.getElementById('dynamicFormParentId').value;
+    const entityId = document.getElementById('dynamicFormEntityId').value;
+    const data = {};
+
+    // Collect data from form
+    for (const [key, config] of Object.entries(schema.fields)) {
+    const element = document.getElementById(`dynamic-form-field-${key}`);
+    if (element) {
+    if (config.required && !element.value && element.type !== 'checkbox') {
+    showMessage(`${config.label} is required.`, true);
+    return;
+    }
+    data[key] = (element.type === 'checkbox') ? element.checked : element.value;
+    }
+    }
+
+    const apiCall = entityId
+    ? api.run(schema.updateApi, entityId, data)
+    : api.run(schema.createApi, parentId, data);
+
+    apiCall.then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    closeModal('dynamicFormModal');
+    if (schema.refreshFunc) schema.refreshFunc(parentId);
+    } else {
+    showMessage(res.message, true);
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    /**
+    * Deletes an entity from a dynamic form context.
+    * @param {string} schemaName - The key of the schema in the formSchemas object.
+    * @param {string} entityId - The ID of the entity to delete.
+    * @param {string} parentId - The ID of the parent entity.
+    */
+    function deleteDynamicFormEntity(schemaName, entityId, parentId) {
+    const schema = formSchemas[schemaName];
+    if (!schema || !schema.deleteApi) {
+    showMessage(`Error: Delete configuration for '${schemaName}' not found.`, true);
+    return;
+    }
+
+    showConfirmModal(
+    `Delete ${schema.title}`,
+    `Are you sure you want to delete this ${schema.title.toLowerCase()}? This action cannot be undone.`,
+    () => {
+    // Handle special case where the delete API needs the parent ID (e.g., CAQH)
+    const idToDelete = (schema.deleteIdSource === 'parentId') ? parentId : entityId;
+
+    api.run(schema.deleteApi, idToDelete).then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    if (schema.refreshFunc) schema.refreshFunc(parentId);
+    }
+    else { showMessage(res.message, true); }
+    }).catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    // --- Reports Handlers ---
+    function loadGeneratedReports(reportType) {
+    state.reports.currentType = reportType;
+    const tableBody = document.getElementById('generatedReportsTableBody');
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center">Loading reports...</td>
+    </tr>`;
+    }
+
+    let apiFunctionName;
+    switch (reportType) {
+    case 'Roster': apiFunctionName = 'listRosterReports'; break;
+    case 'Enrollments': apiFunctionName = 'listEnrollmentsReports'; break;
+    case 'ExpirableCredentials': apiFunctionName = 'listExpirableCredentialsReports'; break;
+    case 'SanctionsAndExclusions': apiFunctionName = 'listSanctionsAndExclusionsReports'; break;
+    default:
+    showMessage('Unknown report type.', true);
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center text-red-500">Unknown report type.</td>
+    </tr>`;
+    }
+    return;
+    }
+
+    api.run(apiFunctionName).then(response => {
+    if (response.success) { state.reports.data = response.data; renderGeneratedReports(response.data); }
+    else {
+    showMessage(response.message, true);
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    /**
+    * Handles the click event for the "Generate Report" button.
+    * Gathers the selected report type and parameters, then calls the backend.
+    */
+    function handleGenerateReportClick() {
+    const reportType = document.getElementById('reportTypeSelect').value;
+    if (!reportType) {
+    showMessage('Please select a report type to generate.', true);
+    return;
+    }
+
+    const parameters = {};
+    if (reportType === 'Roster') {
+    const statusFilter = document.getElementById('rosterStatusFilter');
+    if (statusFilter && statusFilter.value) {
+    parameters.status = statusFilter.value;
+    }
+    }
+    // Add logic to gather parameters for other report types here
+
+    showConfirmModal(
+    `Generate ${reportType} Report`,
+    `Are you sure you want to generate a new ${reportType} report? This may take a moment.`,
+    () => {
+    showMessage(`Generating ${reportType} report...`, false);
+    api.run('generateReport', reportType, parameters)
+    .then(res => {
+    showMessage(res.message, !res.success);
+    if (res.success) {
+    // Refresh the list of generated reports for the current type
+    if (state.reports.currentType) {
+    loadGeneratedReports(state.reports.currentType);
+    }
+    }
+    })
+    .catch(err => showMessage(err.message, true));
+    },
+    'Generate',
+    'btn-primary'
+    );
+    }
+
+    /**
+    * Dynamically updates the UI to show relevant parameter fields for the selected report type.
+    */
+    function updateReportParameterUI() {
+    const reportType = document.getElementById('reportTypeSelect').value;
+    const paramsContainer = document.getElementById('reportParametersContainer');
+    paramsContainer.innerHTML = ''; // Clear existing parameters
+
+    if (reportType === 'Roster') {
+    paramsContainer.innerHTML = `<div><label for="rosterStatusFilter"
+            class="block text-sm font-medium text-gray-700 mb-1">Filter by Status (Optional):</label><select
+            id="rosterStatusFilter" class="rounded-lg w-full">
+            <option value="">All Statuses</option>
+            <option value="Data Collection">Data Collection</option>
+            <option value="Active">Active</option>
+            <option value="Needs Review">Needs Review</option>
+            <option value="Expired">Expired</option>
+        </select></div>`;
+    }
+    // Add 'else if' blocks for other report types with parameters
+    }
+    // --- Webhook Handlers ---
+    function addWebhook() {
+    const webhookType = document.getElementById('webhookType');
+    const webhookUrl = document.getElementById('webhookUrl');
+    const webhookSecret = document.getElementById('webhookSecret');
+    const webhookAllowInsecure = document.getElementById('webhookAllowInsecure');
+    const webhookIncludeSensitive = document.getElementById('webhookIncludeSensitive');
+
+    const webhookData = {
+    type: webhookType ? webhookType.value : '',
+    url: webhookUrl ? webhookUrl.value : '',
+    secret: webhookSecret ? webhookSecret.value : '',
+    allowInsecureUrl: webhookAllowInsecure ? webhookAllowInsecure.checked : false,
+    includeSensitiveInfo: webhookIncludeSensitive ? webhookIncludeSensitive.checked : false
+    };
+    if (!webhookData.type || !webhookData.url) {
+    showMessage('Webhook Type and URL are required.', true);
+    return;
+    }
+    api.run('createWebhook', webhookData)
+    .then(handleSaveResponse(loadWebhooks, clearWebhookForm))
+    .catch(err => showMessage(err.message, true));
+    }
+
+    function updateWebhook() {
+    const id = document.getElementById('webhookId');
+    if (!id || !id.value) {
+    showMessage('Webhook ID is required to update.', true);
+    return;
+    }
+    const webhookType = document.getElementById('webhookType');
+    const webhookUrl = document.getElementById('webhookUrl');
+    const webhookSecret = document.getElementById('webhookSecret');
+    const webhookAllowInsecure = document.getElementById('webhookAllowInsecure');
+    const webhookIncludeSensitive = document.getElementById('webhookIncludeSensitive');
+
+    const webhookData = {
+    type: webhookType ? webhookType.value : '',
+    url: webhookUrl ? webhookUrl.value : '',
+    secret: webhookSecret ? webhookSecret.value : '',
+    allowInsecureUrl: webhookAllowInsecure ? webhookAllowInsecure.checked : false,
+    includeSensitiveInfo: webhookIncludeSensitive ? webhookIncludeSensitive.checked : false
+    };
+    api.run('patchWebhook', id.value, webhookData)
+    .then(handleSaveResponse(loadWebhooks, clearWebhookForm))
+    .catch(err => showMessage(err.message, true));
+    }
+
+    function deleteWebhook() {
+    const id = document.getElementById('webhookId');
+    if (!id || !id.value) {
+    showMessage('Select a webhook to delete.', true);
+    return;
+    }
+    showConfirmModal(
+    'Delete Webhook',
+    `Are you sure you want to delete webhook ${id.value} and all its logs? This action cannot be undone.`,
+    () => {
+    api.run('deleteWebhook', id.value)
+    .then(handleSaveResponse(loadWebhooks, clearWebhookForm))
+    .catch(err => showMessage(err.message, true));
+    }
+    );
+    }
+
+    function loadWebhooks() {
+    const webhookTableBody = document.getElementById('webhookTableBody');
+    if (webhookTableBody) { // Null check
+    webhookTableBody.innerHTML = '<tr>
+        <td colspan="4" class="text-center">Loading webhooks...</td>
+    </tr>';
+    }
+    api.run('listWebhooks').then(response => {
+    if (response.success) {
+    state.webhooks.data = response.data;
+    renderWebhooks(response.data);
+    } else {
+    showMessage(response.message, true);
+    if (webhookTableBody) { // Null check
+    webhookTableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    function viewWebhookLogs(webhookId) {
+    const logModalWebhookId = document.getElementById('logModalWebhookId');
+    if (logModalWebhookId) logModalWebhookId.textContent = webhookId.substring(0, 8) + '...'; // Null check
+    openModal('webhookLogsModal');
+    const tableBody = document.getElementById('webhookLogsTableBody');
+    if (tableBody) { // Null check
+    tableBody.innerHTML = '<tr>
+        <td colspan="4" class="text-center">Loading logs...</td>
+    </tr>';
+    }
+    api.run('listWebhooksLog', webhookId).then(response => {
+    if (response.success) {
+    renderWebhookLogs(response.data);
+    } else {
+    showMessage(response.message, true);
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="4" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- Profile Imports Handlers ---
+    async function loadProfileImportSources() {
+    try {
+    const [providerSourcesRes, facilitySourcesRes] = await Promise.all([
+    api.run('listProviderProfileImportSources'),
+    api.run('listFacilityProfileImportSources')
+    ]);
+    if (providerSourcesRes.success) { state.importSources.provider = providerSourcesRes.data; }
+    else { showMessage(`Failed to load provider import sources: ${providerSourcesRes.message}`, true); }
+    if (facilitySourcesRes.success) { state.importSources.facility = facilitySourcesRes.data; }
+    else { showMessage(`Failed to load facility import sources: ${facilitySourcesRes.message}`, true); }
+    } catch (err) { showMessage(`Error loading import sources: ${err.message}`, true); }
+    }
+
+    function updateImportSourceOptions() {
+    const importEntityType = document.getElementById('importEntityType');
+    const entityType = importEntityType ? importEntityType.value : ''; // Null check
+    const importSourceSelect = document.getElementById('importSource');
+    if (importSourceSelect) { // Null check
+    importSourceSelect.innerHTML = '<option value="">-- Select Source --</option>';
+    importSourceSelect.disabled = true;
+    }
+    const sources = state.importSources[entityType];
+    if (sources && sources.length > 0) {
+    if (importSourceSelect) { // Null check
+    sources.forEach(source => {
+    const option = document.createElement('option');
+    option.value = source.source;
+    option.textContent = source.name;
+    importSourceSelect.appendChild(option);
+    });
+    importSourceSelect.disabled = false;
+    }
+    }
+    const importParametersContainer = document.getElementById('importParametersContainer');
+    if (importParametersContainer) { // Null check
+    importParametersContainer.innerHTML = '';
+    }
+    }
+
+    async function initiateProfileImport() {
+    const importEntityType = document.getElementById('importEntityType');
+    const importEntityId = document.getElementById('importEntityId');
+    const importSource = document.getElementById('importSource');
+
+    const entityType = importEntityType ? importEntityType.value : ''; // Null check
+    const entityId = importEntityId ? importEntityId.value.trim() : ''; // Null check
+    const source = importSource ? importSource.value : ''; // Null check
+
+    if (!entityType || !entityId || !source) { showMessage('Please select an entity type, enter an entity ID, and select
+    an import source.', true); return; }
+
+    showConfirmModal(
+    'Initiate Profile Import',
+    `Are you sure you want to initiate a profile import for ${entityType} ID: ${entityId} from ${source}?`,
+    async () => {
+    const importData = { source: source };
+    if (entityType === 'provider') { importData.providerId = entityId; }
+    else if (entityType === 'facility') { importData.facilityId = entityId; }
+    try {
+    let response;
+    if (entityType === 'provider') { response = await api.run('createProviderProfileImport', importData); }
+    else if (entityType === 'facility') { response = await api.run('createFacilityProfileImport', importData); }
+    if (response.success) { showMessage(response.message); clearProfileImportForm(); loadProfileImports(1); }
+    else { showMessage(response.message, true); }
+    } catch (err) { showMessage(`Error initiating import: ${err.message}`, true); }
+    }
+    );
+    }
+
+    function clearProfileImportForm() {
+    const importEntityType = document.getElementById('importEntityType');
+    if (importEntityType) importEntityType.value = '';
+    const importEntityId = document.getElementById('importEntityId');
+    if (importEntityId) importEntityId.value = '';
+    const importSource = document.getElementById('importSource');
+    if (importSource) {
+    importSource.innerHTML = '<option value="">-- Select Source --</option>';
+    importSource.disabled = true;
+    }
+    const importParametersContainer = document.getElementById('importParametersContainer');
+    if (importParametersContainer) importParametersContainer.innerHTML = '';
+    }
+
+    async function loadProfileImports(page = 1) {
+    state.profileImports.currentPage = page;
+    const profileImportSearch = document.getElementById('profileImportSearch');
+    state.profileImports.searchTerm = profileImportSearch ? profileImportSearch.value : ''; // Null check
+    const profileImportStatusFilter = document.getElementById('profileImportStatusFilter');
+    state.profileImports.statusFilter = profileImportStatusFilter ? profileImportStatusFilter.value : ''; // Null check
+    const profileImportsTableBody = document.getElementById('profileImportsTableBody');
+    if (profileImportsTableBody) { // Null check
+    profileImportsTableBody.innerHTML = '<tr>
+        <td colspan="7" class="text-center">Loading profile imports...</td>
+    </tr>';
+    }
+    const options = { page: state.profileImports.currentPage, pageSize: config.pageSize, searchTerm:
+    state.profileImports.searchTerm, status: state.profileImports.statusFilter };
+    try {
+    const providerImportsRes = await api.run('listProviderProfileImports', options);
+    let allImports = [];
+    if (providerImportsRes.success) {
+    allImports = allImports.concat(providerImportsRes.data);
+    state.profileImports.totalRecords = providerImportsRes.totalRecords;
+    } else { showMessage(`Failed to load provider imports: ${providerImportsRes.message}`, true); }
+    renderProfileImports(allImports);
+    renderPagination('profileImports', state.profileImports.currentPage, config.pageSize,
+    state.profileImports.totalRecords);
+    } catch (err) {
+    showMessage(`Error loading profile imports: ${err.message}`, true);
+    if (profileImportsTableBody) { // Null check
+    profileImportsTableBody.innerHTML = `<tr>
+        <td colspan="7" class="text-center text-red-500">${err.message}</td>
+    </tr>`;
+    }
+    const profileImportsPagination = document.getElementById('profileImportsPagination');
+    if (profileImportsPagination) { // Null check
+    profileImportsPagination.innerHTML = '';
+    }
+    }
+    }
+
+    // --- Alerts Handlers ---
+    function loadAlerts(page = 1) {
+    state.alerts.currentPage = page;
+    const alertSearch = document.getElementById('alertSearch');
+    state.alerts.searchTerm = alertSearch ? alertSearch.value : ''; // Null check
+    const alertStatusFilter = document.getElementById('alertStatusFilter');
+    state.alerts.statusFilter = alertStatusFilter ? alertStatusFilter.value : ''; // Null check
+    const alertsTableBody = document.getElementById('alertsTableBody');
+    if (alertsTableBody) { // Null check
+    alertsTableBody.innerHTML = '<tr>
+        <td colspan="5" class="text-center">Loading alerts...</td>
+    </tr>';
+    }
+    const options = { page: state.alerts.currentPage, pageSize: config.pageSize, searchTerm: state.alerts.searchTerm,
+    status: state.alerts.statusFilter };
+    api.run('listAlerts', options).then(response => {
+    if (response.success) {
+    renderAlerts(response.data);
+    renderPagination('alerts', state.alerts.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    if (alertsTableBody) { // Null check
+    alertsTableBody.innerHTML = `<tr>
+        <td colspan="5" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const alertsPagination = document.getElementById('alertsPagination');
+    if (alertsPagination) { // Null check
+    alertsPagination.innerHTML = '';
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    function dismissAlert(alertId) {
+    // Still using prompt here, consider replacing with a custom input modal for dismissal note
+    const note = prompt("Enter an optional note for dismissing this alert:", "");
+    if (note === null) return; // User cancelled
+    api.run('dismissAlert', alertId, { dismissalNote: note }).then(res => {
+    if (res.success) {
+    showMessage(res.message);
+    loadAlerts(state.alerts.currentPage);
+    } else {
+    showMessage(res.message, true);
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- Files Handlers ---
+    function loadFiles(page = 1) {
+    state.files.currentPage = page;
+    const fileSearch = document.getElementById('fileSearch');
+    state.files.searchTerm = fileSearch ? fileSearch.value : ''; // Null check
+    const filesTableBody = document.getElementById('filesTableBody');
+    if (filesTableBody) { // Null check
+    filesTableBody.innerHTML = '<tr>
+        <td colspan="6" class="text-center">Loading files...</td>
+    </tr>';
+    }
+    const options = { page: state.files.currentPage, pageSize: config.pageSize, searchTerm: state.files.searchTerm };
+    api.run('listUploadedFilesMetadata', options).then(response => {
+    if (response.success) {
+    renderFiles(response.data);
+    renderPagination('files', state.files.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    if (filesTableBody) { // Null check
+    filesTableBody.innerHTML = `<tr>
+        <td colspan="6" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const filesPagination = document.getElementById('filesPagination');
+    if (filesPagination) { // Null check
+    filesPagination.innerHTML = '';
+    }
+    }
+    }).catch(err => showMessage(err.message, true));
+    }
+
+    // --- NEW License & Verification Management Handlers ---
+    async function loadProviderLicenses(page = 1) {
+    state.licenses.currentPage = page;
+    const licenseSearch = document.getElementById('licenseSearch');
+    state.licenses.searchTerm = licenseSearch ? licenseSearch.value : ''; // Null check
+    const licenseStatusFilter = document.getElementById('licenseStatusFilter');
+    state.licenses.statusFilter = licenseStatusFilter ? licenseStatusFilter.value : ''; // Null check
+    const licenseStateFilter = document.getElementById('licenseStateFilter');
+    state.licenses.stateFilter = licenseStateFilter ? licenseStateFilter.value : ''; // Null check
+    const licenseTypeFilter = document.getElementById('licenseTypeFilter');
+    state.licenses.typeFilter = licenseTypeFilter ? licenseTypeFilter.value : ''; // Null check
+
+    const providerLicensesTableBody = document.getElementById('providerLicensesTableBody');
+    if (providerLicensesTableBody) { // Null check
+    providerLicensesTableBody.innerHTML = '<tr>
+        <td colspan="8" class="text-center">Loading licenses...</td>
+    </tr>';
+    }
+
+    const options = {
+    page: state.licenses.currentPage,
+    pageSize: config.pageSize,
+    searchTerm: state.licenses.searchTerm,
+    status: state.licenses.statusFilter,
+    state: state.licenses.stateFilter,
+    licenseTypeId: state.licenses.typeFilter,
+    sortBy: 'expirationDate',
+    sortOrder: 'asc'
+    };
+
+    try {
+    const response = await api.run('listProviderLicenses', options);
+    if (response.success) {
+    renderProviderLicenses(response.data);
+    renderPagination('providerLicenses', state.licenses.currentPage, config.pageSize, response.totalRecords);
+    } else {
+    showMessage(response.message, true);
+    if (providerLicensesTableBody) {
+    providerLicensesTableBody.innerHTML = `<tr>
+        <td colspan="8" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    const providerLicensesPagination = document.getElementById('providerLicensesPagination');
+    if (providerLicensesPagination) {
+    providerLicensesPagination.innerHTML = '';
+    }
+    }
+    } catch (err) {
+    showMessage(err.message, true);
+    if (providerLicensesTableBody) {
+    providerLicensesTableBody.innerHTML = `<tr>
+        <td colspan="8" class="text-center text-red-500">${err.message}</td>
+    </tr>`;
+    }
+    const providerLicensesPagination = document.getElementById('providerLicensesPagination');
+    if (providerLicensesPagination) {
+    providerLicensesPagination.innerHTML = '';
+    }
+    }
+    }
+
+    async function viewLicenseVerifications(providerId, licenseId, licenseNumber) {
+    openModal('licenseVerificationsModal');
+    const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+    if (modalLicenseNumber) modalLicenseNumber.textContent = licenseNumber; // Null check
+    const provider = state.providers.data.find(p => p.id === providerId);
+    const modalLicenseProviderName = document.getElementById('modalLicenseProviderName');
+    if (modalLicenseProviderName) modalLicenseProviderName.textContent = provider ? `${provider.firstName}
+    ${provider.lastName}` : 'Unknown Provider'; // Null check
+
+    const triggerVerificationButton = document.getElementById('triggerVerificationButton');
+    if (triggerVerificationButton) triggerVerificationButton.onclick = () => triggerNewLicenseVerification(providerId,
+    licenseId); // Null check
+
+    const tableBody = document.getElementById('licenseVerificationsTableBody');
+    if (tableBody) { // Null check
+    tableBody.innerHTML = '<tr>
+        <td colspan="6" class="text-center">Loading verifications...</td>
+    </tr>';
+    }
+
+    try {
+    const response = await api.run('listLicenseVerifications', providerId, licenseId);
+    if (response.success) {
+    renderLicenseVerificationsTable(response.data, providerId, licenseId);
+    } else {
+    showMessage(response.message, true);
+    if (tableBody) { // Null check
+    tableBody.innerHTML = `<tr>
+        <td colspan="6" class="text-center text-red-500">${response.message}</td>
+    </tr>`;
+    }
+    }
+    } catch (err) {
+    showMessage(err.message, true);
+    }
+    }
+
+    function renderLicenseVerificationsTable(verifications, providerId, licenseId) {
+    const tableBody = document.getElementById('licenseVerificationsTableBody');
+    if (!tableBody) return; // Ensure tableBody exists
+
+    tableBody.innerHTML = '';
+
+    if (!verifications || verifications.length === 0) {
+    tableBody.innerHTML = '<tr>
+        <td colspan="6" class="text-center text-gray-500">No verifications found for this license.</td>
+    </tr>';
+    return;
+    }
+
+    verifications.forEach(verification => {
+    const row = tableBody.insertRow();
+    row.insertCell().textContent = verification.id.substring(0, 8) + '...';
+    row.insertCell().textContent = verification.started ? new Date(verification.started).toLocaleString() : 'N/A';
+    row.insertCell().textContent = verification.status || 'N/A';
+    row.insertCell().textContent = verification.trigger || 'N/A';
+    row.insertCell().textContent = verification.processingTime || 'N/A';
+
+    const actionsCell = row.insertCell();
+    actionsCell.innerHTML = `
+    <button onclick="viewSingleLicenseVerification('${providerId}', '${licenseId}', '${verification.id}')"
+        class="text-blue-500 hover:underline text-xs mr-2">View Details</button>
+    `;
+    });
+    }
+
+    async function triggerNewLicenseVerification(providerId, licenseId) {
+    showConfirmModal(
+    'Trigger Verification',
+    'Are you sure you want to trigger a new verification for this license? This may take some time.',
+    async () => {
+    showMessage('Triggering new license verification...', false);
+    try {
+    const response = await api.run('triggerLicenseVerification', providerId, licenseId);
+    if (response.success) {
+    showMessage(response.message);
+    const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+    const licenseNumber = modalLicenseNumber ? modalLicenseNumber.textContent : ''; // Null check
+    viewLicenseVerifications(providerId, licenseId, licenseNumber);
+    loadProviderLicenses(state.licenses.currentPage);
+    } else {
+    showMessage(response.message, true);
+    }
+    } catch (err) {
+    showMessage(err.message, true);
+    }
+    }
+    );
+    }
+
+    let currentDetailedVerificationId = null;
+    async function viewSingleLicenseVerification(providerId, licenseId, verificationId) {
+    openModal('singleLicenseVerificationModal');
+    const singleVerificationId = document.getElementById('singleVerificationId');
+    if (singleVerificationId) singleVerificationId.textContent = verificationId.substring(0, 8) + '...'; // Null check
+    const singleVerificationDetailsContent = document.getElementById('singleVerificationDetailsContent');
+    if (singleVerificationDetailsContent) singleVerificationDetailsContent.innerHTML = '<p class="text-center">Loading
+        verification details...</p>'; // Null check
+    currentDetailedVerificationId = verificationId;
+
+    try {
+    const response = await api.run('getLicenseVerification', providerId, licenseId, verificationId);
+    if (response.success) {
+    const verification = response.data;
+    const detailLicenseId = document.getElementById('detailLicenseId');
+    if (detailLicenseId) detailLicenseId.textContent = verification.licenseId;
+    const detailProviderId = document.getElementById('detailProviderId');
+    if (detailProviderId) detailProviderId.textContent = verification.providerId;
+    const detailStatus = document.getElementById('detailStatus');
+    if (detailStatus) detailStatus.textContent = verification.status;
+    const detailOriginalStatus = document.getElementById('detailOriginalStatus');
+    if (detailOriginalStatus) detailOriginalStatus.textContent = verification.originalStatus || 'N/A';
+    const detailTrigger = document.getElementById('detailTrigger');
+    if (detailTrigger) detailTrigger.textContent = verification.trigger || 'N/A';
+    const detailStarted = document.getElementById('detailStarted');
+    if (detailStarted) detailStarted.textContent = verification.started ? new
+    Date(verification.started).toLocaleString() : 'N/A';
+    const completedTime = verification.started && verification.processingTime
+    ? new Date(new Date(verification.started).getTime() + verification.processingTime).toLocaleString()
+    : (verification.status === 'Completed' || verification.status === 'Found' ? 'N/A (check backend)' : 'N/A');
+    const detailCompleted = document.getElementById('detailCompleted');
+    if (detailCompleted) detailCompleted.textContent = verification.completed ? new
+    Date(verification.completed).toLocaleString() : completedTime;
+
+    const detailProcessingTime = document.getElementById('detailProcessingTime');
+    if (detailProcessingTime) detailProcessingTime.textContent = verification.processingTime || 'N/A';
+    const detailCorrectResultIndex = document.getElementById('detailCorrectResultIndex');
+    if (detailCorrectResultIndex) detailCorrectResultIndex.textContent = verification.correctResultIndex !== null ?
+    verification.correctResultIndex : 'N/A';
+    const detailFailureReason = document.getElementById('detailFailureReason');
+    if (detailFailureReason) detailFailureReason.textContent = verification.failureReason &&
+    verification.failureReason.message ? verification.failureReason.message : 'N/A';
+
+    const detailResultsJson = document.getElementById('detailResultsJson');
+    if (detailResultsJson) detailResultsJson.textContent = verification.results ? JSON.stringify(verification.results,
+    null, 2) : '{}';
+    const detailSourceJson = document.getElementById('detailSourceJson');
+    if (detailSourceJson) detailSourceJson.textContent = verification.verificationSource ?
+    JSON.stringify(verification.verificationSource, null, 2) : '{}';
+
+    const resolveSection = document.getElementById('resolveVerificationSection');
+    if (resolveSection) { // Null check
+    if (verification.status === 'NeedsReview') {
+    resolveSection.classList.remove('hidden');
+    const resolveStatus = document.getElementById('resolveStatus');
+    if (resolveStatus) resolveStatus.value = ''; // Reset dropdown
+    const correctResultIndex = document.getElementById('correctResultIndex');
+    if (correctResultIndex) correctResultIndex.value = ''; // Reset input
+    // Pre-fill if there's a correctResultIndex already
+    if (verification.correctResultIndex !== null) {
+    if (correctResultIndex) correctResultIndex.value = verification.correctResultIndex;
+    if (resolveStatus) resolveStatus.value = verification.status; // Keep current status as initial if editing
+    }
+    } else {
+    resolveSection.classList.add('hidden');
+    }
+    }
+
+    } else {
+    showMessage(response.message, true);
+    closeModal('singleLicenseVerificationModal');
+    }
+    } catch (err) {
+    showMessage(err.message, true);
+    closeModal('singleLicenseVerificationModal');
+    }
+    }
+
+    async function resolveCurrentVerification() {
+    const verificationId = currentDetailedVerificationId;
+    const resolveStatus = document.getElementById('resolveStatus');
+    const correctIndexInput = document.getElementById('correctResultIndex');
+
+    const newStatus = resolveStatus ? resolveStatus.value : ''; // Null check
+    const correctIndex = correctIndexInput ? correctIndexInput.value : ''; // Null check
+
+    if (!verificationId || !newStatus) {
+    showMessage('Verification ID and a resolved status are required.', true);
+    return;
+    }
+
+    const body = {
+    status: newStatus,
+    correctResultIndex: correctIndex !== '' ? parseInt(correctIndex, 10) : null
+    };
+
+    showConfirmModal(
+    'Resolve Verification',
+    `Are you sure you want to resolve this verification to "${newStatus}"?`,
+    async () => {
+    showMessage('Resolving verification...', false);
+    try {
+    const response = await api.run('resolveLicenseVerificationProblems', verificationId, body);
+    if (response.success) {
+    showMessage(response.message);
+    closeModal('singleLicenseVerificationModal');
+    const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+    const licenseNumber = modalLicenseNumber ? modalLicenseNumber.textContent : ''; // Null check
+    const detailLicenseId = document.getElementById('detailLicenseId');
+    const licenseId = detailLicenseId ? detailLicenseId.textContent : ''; // Null check
+    const detailProviderId = document.getElementById('detailProviderId');
+    const providerId = detailProviderId ? detailProviderId.textContent : ''; // Null check
+    if (document.getElementById('licenseVerificationsModal').style.display === 'block') {
+    viewLicenseVerifications(providerId, licenseId, licenseNumber);
+    }
+    loadProviderLicenses(state.licenses.currentPage);
+    } else {
+    showMessage(response.message, true);
+    }
+    } catch (err) {
+    showMessage(err.message, true);
+    }
+    }
+    );
+    }
+
+    // =================================================================
+    // 7. RENDERING FUNCTIONS
+    // =================================================================
+
+    // --- Table & List Renderers ---
+    function renderProviders(providers) {
+    renderTableHeaders('provider');
+    const tableBody = document.getElementById('providerTableBody');
+    if (!tableBody) return; // Ensure tableBody exists
+
+    tableBody.innerHTML = '';
+    let dataToRender = providers;
+    if (state.providers.filter === 'dueForRecred') {
+    const ninetyDaysFromNow = new Date();
+    ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+    dataToRender = providers.filter(p => p.nextCredentialingDate && !p.deactivated && new Date(p.nextCredentialingDate)
+    <= ninetyDaysFromNow); // This client-side filter is flawed, but we'll leave it for now. A better approach is
+        backend filtering. } if (dataToRender.length===0) {
+        tableBody.innerHTML='<tr><td colspan="9" class="text-center text-gray-500">No providers found.</td></tr>' ;
+        return; } dataToRender.forEach(provider=> {
+        const row = tableBody.insertRow();
+        row.insertCell().innerHTML = `<input type="checkbox" class="provider-checkbox" value="${provider.id}"
+            onchange="updateBulkActionUI()">`;
+        row.insertCell().textContent = provider.id;
+        row.insertCell().textContent = provider.id.substring(0, 8) + '...';
+        row.insertCell().textContent = provider.firstName;
+        row.insertCell().textContent = provider.lastName;
+        row.insertCell().textContent = provider.npi || 'N/A';
+        row.insertCell().textContent = provider.nextCredentialingDate ? new
+        Date(provider.nextCredentialingDate).toLocaleDateString() : 'N/A';
+        row.insertCell().textContent = provider.credentialingStatus;
+        row.insertCell().innerHTML = provider.deactivated ? '<span
+            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Yes</span>' :
+        '<span
+            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">No</span>';
+        row.insertCell().innerHTML = `<button onclick="viewProviderDetails('${provider.id}')"
+            class="text-green-600 hover:underline text-xs mr-2">View</button><button
+            onclick='editProvider(${JSON.stringify(provider)})'
+            class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        row.insertCell().innerHTML = `
+        <button onclick="viewProviderDetails('${provider.id}')" class="text-green-600 hover:underline text-xs mr-2">View
+            Profile</button>
+        <button onclick='editProvider(${JSON.stringify(provider)})'
+            class='text-blue-500 hover:underline text-xs mr-2'>Edit Row</button>
+        <button onclick="openDynamicFormModal('providerQuickNote', '${provider.id}', null)"
+            class="text-purple-600 hover:underline text-xs">Add Note</button>
+        `;
+        });
+        updateBulkActionUI();
+
+        }
+
+        function renderFacilities(facilities) {
+        renderTableHeaders('facility');
+        const tableBody = document.getElementById('facilitiesTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (facilities.length === 0) { tableBody.innerHTML = '<tr>
+            <td colspan="6" class="text-center">No facilities found.</td>
+        </tr>'; return; }
+        facilities.forEach(facility => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = facility.id;
+        row.insertCell().textContent = facility.id.substring(0, 8) + '...';
+        row.insertCell().textContent = facility.name;
+        row.insertCell().textContent = facility.city || 'N/A';
+        row.insertCell().textContent = facility.state || 'N/A';
+        row.insertCell().innerHTML = facility.deactivated ? '<span
+            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Yes</span>' :
+        '<span
+            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">No</span>';
+        row.insertCell().innerHTML = `<button onclick="viewFacilityDetails('${facility.id}')"
+            class="text-green-600 hover:underline text-xs mr-2">View</button><button
+            onclick='editFacility(${JSON.stringify(facility)})'
+            class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        row.insertCell().innerHTML = `
+        <button onclick="viewFacilityDetails('${facility.id}')" class="text-green-600 hover:underline text-xs mr-2">View
+            Profile</button>
+        <button onclick='editFacility(${JSON.stringify(facility)})'
+            class='text-blue-500 hover:underline text-xs mr-2'>Edit Row</button>
+        <button onclick="openDynamicFormModal('facilityQuickNote', '${facility.id}', null)"
+            class="text-purple-600 hover:underline text-xs">Add Note</button>
+        `;
+        });
+        }
+
+        function renderGroups(groups) {
+        const tableBody = document.getElementById('groupsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        groups.forEach(group => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = group.id.substring(0, 8) + '...';
+        row.insertCell().textContent = group.name;
+        row.insertCell().textContent = group.npi || 'N/A';
+        row.insertCell().textContent = group.taxId || 'N/A';
+        const groupJson = encodeURIComponent(JSON.stringify(group));
+        row.insertCell().innerHTML = `<button onclick="viewGroupDetails('${group.id}')"
+            class='btn-secondary text-xs px-2 py-1'>Manage</button><button onclick='editGroup(${groupJson})'
+            class='text-blue-500 hover:underline text-xs ml-2'>Edit Form</button>`;
+        });
+        }
+
+        function renderPayers(payers) {
+        const tableBody = document.getElementById('payersTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (payers.length > 0) {
+        payers.forEach(payer => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = payer.id;
+        row.insertCell().innerHTML = `<a href="#" onclick="viewPayerDetails('${payer.id}')"
+            class="text-blue-600 hover:underline">${payer.name}</a>`;
+        row.insertCell().innerHTML = `<button onclick="viewPayerDetails('${payer.id}')"
+            class='btn-secondary text-xs px-2 py-1'>Manage</button><button onclick='editPayer(${JSON.stringify(payer)})'
+            class='text-blue-500 hover:underline text-xs ml-2'>Edit Form</button>`;
+        });
+        } else { tableBody.innerHTML = '<tr>
+            <td colspan="3" class="text-center">No payers found.</td>
+        </tr>'; }
+        }
+        function renderPayerPlans(plans) {
+        const tableBody = document.getElementById('payerPlansTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (plans.length > 0) {
+        plans.forEach(plan => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = plan.id;
+        row.insertCell().textContent = plan.name;
+        row.insertCell().textContent = plan.state;
+        row.insertCell().innerHTML = `<button onclick='editPayerPlan(${JSON.stringify(plan)})'
+            class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        });
+        } else { tableBody.innerHTML = '<tr>
+            <td colspan="4" class="text-center">No plans found for this payer.</td>
+        </tr>'; }
+        }
+        function renderProviderEnrollments(enrollments) {
+        const tableBody = document.getElementById('providerEnrollmentsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (enrollments.length > 0) {
+        enrollments.forEach(e => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = e.id;
+        row.insertCell().textContent = e.payerName;
+        row.insertCell().textContent = e.payerPlanName;
+        row.insertCell().textContent = e.groupName;
+        row.insertCell().textContent = e.enrollmentStatus;
+        row.insertCell().textContent = e.effectiveDate ? new Date(e.effectiveDate).toLocaleDateString() : 'N/A';
+        row.insertCell().innerHTML = `<button onclick='editProviderEnrollment(${JSON.stringify(e)})'
+            class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        });
+        } else { tableBody.innerHTML = '<tr>
+            <td colspan="7" class="text-center">No enrollments found for this provider.</td>
+        </tr>'; }
+        }
+        function renderCredentialingRequests() {
+        const dataToRender = state.credentialingRequests.data;
+        const tableBody = document.getElementById('credentialingRequestsTableBody');
+        tableBody.innerHTML = '';
+        if (dataToRender.length === 0) { tableBody.innerHTML = '<tr>
+            <td colspan="7" class="text-center">No requests found.</td>
+        </tr>'; return; }
+        dataToRender.forEach(request => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = request.id.substring(0, 8) + '...';
+        row.insertCell().textContent = request.entityName || (request.providerId || request.facilityId).substring(0, 8)
+        + '...';
+        row.insertCell().textContent = request.type;
+        row.insertCell().textContent = request.status;
+        row.insertCell().textContent = request.owner;
+        row.insertCell().textContent = new Date(request.createdAt).toLocaleString();
+        row.insertCell().innerHTML = `<button onclick="viewCredentialingRequest('${request.id}')"
+            class="text-blue-500 hover:underline text-xs">View</button>`;
+        });
+        }
+        function renderAllNotes(notes) {
+        const tableBody = document.getElementById('allNotesTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (notes.length === 0) { tableBody.innerHTML = '<tr>
+            <td colspan="5" class="text-center text-gray-500">No notes found.</td>
+        </tr>'; return; }
+        notes.forEach(note => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = new Date(note.timestamp).toLocaleString();
+        let entityLink = 'N/A';
+        if (note.providerId && note.providerName) entityLink = `Provider: <a href="#"
+            onclick="closeModal('allNotesModal'); viewProviderDetails('${note.providerId}')"
+            class="text-blue-600 hover:underline">${note.providerName}</a>`;
+        else if (note.facilityId && note.facilityName) entityLink = `Facility: <a href="#"
+            onclick="closeModal('allNotesModal'); viewFacilityDetails('${note.facilityId}')"
+            class="text-blue-600 hover:underline">${note.facilityName}</a>`;
+        else if (note.requestId) entityLink = `Request: <a href="#"
+            onclick="closeModal('allNotesModal'); viewCredentialingRequest('${note.requestId}')"
+            class="text-blue-600 hover:underline">${note.requestId.substring(0, 8)}...</a>`;
+        row.insertCell().innerHTML = entityLink;
+        row.insertCell().textContent = note.note;
+        row.insertCell().textContent = note.userEmail;
+        row.insertCell().innerHTML = `<button onclick="openEditNoteModal('${note.id}')"
+            class="text-blue-500 hover:underline text-xs mr-2">Edit</button><button
+            onclick="deleteNoteFromModal('${note.id}')" class="text-red-500 hover:underline text-xs">Delete</button>`;
+        });
+        }
+
+        function renderWebhooks(webhooks) {
+        const tableBody = document.getElementById('webhookTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!webhooks || webhooks.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="4" class="text-center text-gray-500">No webhooks found.</td>
+        </tr>';
+        return;
+        }
+        webhooks.forEach(webhook => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = webhook.id;
+        row.insertCell().textContent = webhook.type;
+        row.insertCell().textContent = webhook.url;
+        row.insertCell().innerHTML = `
+        <button onclick="viewWebhookLogs('${webhook.id}')" class="text-green-600 hover:underline text-xs mr-2">View
+            Logs</button>
+        <button onclick='editWebhook(${JSON.stringify(webhook)})'
+            class='text-blue-500 hover:underline text-xs mr-2'>Edit</button>
+        <button onclick="document.getElementById('webhookId').value='${webhook.id}'; deleteWebhook();"
+            class="text-red-500 hover:underline text-xs">Delete</button>
+        `;
+        });
+        }
+
+        function renderWebhookLogs(logs) {
+        const tableBody = document.getElementById('webhookLogsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="4" class="text-center text-gray-500">No logs found for this webhook.</td>
+        </tr>';
+        return;
+        }
+        logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(log => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = new Date(log.timestamp).toLocaleString();
+        row.insertCell().textContent = log.status;
+        row.insertCell().textContent = log.responseStatus;
+        const payloadCell = row.insertCell();
+        try {
+        const prettyPayload = JSON.stringify(log.payload, null, 2);
+        payloadCell.innerHTML = `
+        <pre class="text-xs bg-gray-100 p-2 rounded-md max-h-24 overflow-auto">${prettyPayload}</pre>`;
+        } catch (e) {
+        payloadCell.textContent = log.payload;
+        }
+        });
+        }
+
+        function renderEventLogEntries(logs) {
+        const tableBody = document.getElementById('auditLogTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="4" class="text-center text-gray-500">No audit log entries found.</td>
+        </tr>';
+        return;
+        }
+        logs.forEach(log => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = new Date(log.timestamp).toLocaleString();
+
+        const typeCell = row.insertCell();
+        typeCell.textContent = log.type;
+        if (log.type === 'Error') {
+        typeCell.className = 'font-semibold text-red-600';
+        } else if (log.type === 'Request') {
+        typeCell.className = 'font-semibold text-blue-600';
+        }
+
+        row.insertCell().textContent = log.message;
+
+        const contextCell = row.insertCell();
+        if (log.context && Object.keys(log.context).length > 0) {
+        try {
+        contextCell.innerHTML = `
+        <pre
+            class="text-xs bg-gray-100 p-2 rounded-md max-h-24 overflow-auto">${JSON.stringify(log.context, null, 2)}</pre>
+        `;
+        } catch (e) {
+        contextCell.textContent = String(log.context);
+        }
+        }
+        });
+        }
+
+        function renderGeneratedReports(reports) {
+        const tableBody = document.getElementById('generatedReportsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!reports || reports.length === 0) {
+        tableBody.innerHTML = `<tr>
+            <td colspan="4" class="text-center text-gray-500">No ${state.reports.currentType || ''} reports found.</td>
+        </tr>`;
+        return;
+        }
+
+        reports.forEach(report => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = report.type;
+
+        const statusCell = row.insertCell();
+        statusCell.textContent = report.status;
+        if (report.status === 'Completed') {
+        statusCell.className = 'text-green-600 font-semibold';
+        } else if (report.status === 'Failed') {
+        statusCell.className = 'text-red-600 font-semibold';
+        } else if (report.status === 'Working') {
+        statusCell.className = 'text-blue-600 font-semibold';
+        }
+
+        row.insertCell().textContent = report.completedAt ? new Date(report.completedAt).toLocaleString() : 'In
+        Progress';
+
+        const actionsCell = row.insertCell();
+        if (report.status === 'Completed' && report.path) {
+        actionsCell.innerHTML = `<a href="${report.path}" target="_blank" rel="noopener noreferrer"
+            class="btn-primary text-xs px-2 py-1">Download</a>`;
+        } else {
+        actionsCell.innerHTML = `<button class="btn-secondary text-xs px-2 py-1" disabled>N/A</button>`;
+        }
+        });
+        }
+
+        function renderProfileImports(imports) {
+        const tableBody = document.getElementById('profileImportsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!imports || imports.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="7" class="text-center text-gray-500">No profile imports found.</td>
+        </tr>';
+        return;
+        }
+        imports.forEach(job => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = job.id.substring(0, 8) + '...';
+        row.insertCell().textContent = job.providerId || job.facilityId || 'N/A';
+        row.insertCell().textContent = job.source;
+        row.insertCell().textContent = job.status;
+        row.insertCell().textContent = job.started ? new Date(job.started).toLocaleString() : 'N/A';
+        row.insertCell().textContent = job.completed ? new Date(job.completed).toLocaleString() : 'N/A';
+        row.insertCell().innerHTML = `<button
+            onclick="viewProfileImportDetails('${job.id}', '${job.providerId ? 'provider' : 'facility'}')"
+            class="text-blue-500 hover:underline text-xs mr-2">View</button>`;
+        });
+        }
+
+        function renderMonitors(monitors) {
+        const tableBody = document.getElementById('monitorsTableBody');
+        tableBody.innerHTML = '';
+
+        if (!monitors || monitors.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="8" class="text-center text-gray-500">No monitors found.</td>
+        </tr>';
+        return;
+        }
+
+        monitors.forEach(monitor => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = monitor.id.substring(0, 8) + '...';
+        row.insertCell().textContent = monitor.type;
+        row.insertCell().textContent = monitor.providerName || monitor.providerId;
+        row.insertCell().textContent = monitor.datasetType || monitor.licenseId || 'N/A';
+        row.insertCell().textContent = monitor.monitoringInterval;
+        row.insertCell().textContent = monitor.nextMonitoringDate ? new
+        Date(monitor.nextMonitoringDate).toLocaleDateString() : 'N/A';
+        row.insertCell().textContent = monitor.lastMonitoringDate ? new
+        Date(monitor.lastMonitoringDate).toLocaleDateString() : 'N/A';
+
+        const monitorJson = encodeURIComponent(JSON.stringify(monitor));
+        row.insertCell().innerHTML = `<button onclick='editMonitor("${monitorJson}")'
+            class='text-blue-500 hover:underline text-xs'>Edit</button>`;
+        });
+        }
+
+        function editMonitor(monitorJson) {
+        const monitor = JSON.parse(decodeURIComponent(monitorJson));
+        document.getElementById('monitorId').value = monitor.id;
+        document.getElementById('monitorType').value = monitor.type;
+        document.getElementById('monitorProviderId').value = monitor.providerId;
+        document.getElementById('monitorDatasetType').value = monitor.datasetType || '';
+        document.getElementById('monitorLicenseId').value = monitor.licenseId || '';
+        document.getElementById('monitorInterval').value = monitor.monitoringInterval;
+
+        // Disable fields that define the monitor's core identity
+        document.getElementById('monitorType').disabled = true;
+        document.getElementById('monitorProviderId').disabled = true;
+        document.getElementById('monitorDatasetType').disabled = true;
+        document.getElementById('monitorLicenseId').disabled = true;
+
+        toggleMonitorFields();
+        window.scrollTo(0, 0); // Scroll to top to see the form
+        }
+
+        function loadDatasetScans(page = 1) {
+        state.datasetScans.currentPage = page;
+        state.datasetScans.searchTerm = document.getElementById('datasetScanSearch').value;
+        const tableBody = document.getElementById('datasetScansTableBody');
+        tableBody.innerHTML = '<tr>
+            <td colspan="8" class="text-center">Loading scans...</td>
+        </tr>';
+
+        const options = {
+        page: state.datasetScans.currentPage,
+        pageSize: config.pageSize,
+        searchTerm: state.datasetScans.searchTerm,
+        sortBy: 'started',
+        sortOrder: 'desc'
+        };
+
+        api.run('listDatasetScans', options).then(response => {
+        if (response.success) {
+        state.datasetScans.data = response.data;
+        renderDatasetScans(response.data);
+        renderPagination('datasetScans', state.datasetScans.currentPage, config.pageSize, response.totalRecords);
+        } else {
+        showMessage(response.message, true);
+        tableBody.innerHTML = `<tr>
+            <td colspan="8" class="text-center text-red-500">${response.message}</td>
+        </tr>`;
+        document.getElementById('datasetScansPagination').innerHTML = '';
+        }
+        }).catch(err => showMessage(err.message, true));
+        }
+
+        function renderDatasetScans(scans) {
+        const tableBody = document.getElementById('datasetScansTableBody');
+        tableBody.innerHTML = '';
+
+        if (!scans || scans.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="8" class="text-center text-gray-500">No dataset scans found.</td>
+        </tr>';
+        return;
+        }
+
+        scans.forEach(scan => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = scan.id.substring(0, 8) + '...';
+        row.insertCell().textContent = scan.type;
+        row.insertCell().textContent = scan.entityName || (scan.providerId || scan.facilityId).substring(0, 8) + '...';
+        row.insertCell().textContent = scan.status;
+        row.insertCell().textContent = scan.started ? new Date(scan.started).toLocaleString() : 'N/A';
+        row.insertCell().textContent = scan.completed ? new Date(scan.completed).toLocaleString() : 'N/A';
+        row.insertCell().textContent = scan.trigger || 'N/A';
+
+        row.insertCell().innerHTML = `<button onclick="viewScanDetails('${scan.id}')"
+            class="text-blue-500 hover:underline text-xs">View Details</button>`;
+        });
+        }
+
+        async function viewScanDetails(scanId) {
+        openModal('scanDetailsModal');
+        document.getElementById('modalScanId').textContent = scanId.substring(0, 8) + '...';
+        const contentDiv = document.getElementById('scanDetailsContent');
+        const matchesBody = document.getElementById('datasetMatchesTableBody');
+        contentDiv.innerHTML = '<p>Loading scan details...</p>';
+        matchesBody.innerHTML = '<tr>
+            <td colspan="5" class="text-center">Loading matches...</td>
+        </tr>';
+
+        try {
+        const scanRes = await api.run('getDatasetScan', scanId);
+        if (!scanRes.success) throw new Error(scanRes.message);
+        const scan = scanRes.data;
+
+        // Render scan details
+        contentDiv.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+            <div><strong>Type:</strong> <span>${scan.type || 'N/A'}</span></div>
+            <div><strong>Status:</strong> <span>${scan.status || 'N/A'}</span></div>
+            <div><strong>Entity ID:</strong> <span>${scan.providerId || scan.facilityId || 'N/A'}</span></div>
+            <div><strong>Trigger:</strong> <span>${scan.trigger || 'N/A'}</span></div>
+            <div><strong>Started:</strong> <span>${scan.started ? new Date(scan.started).toLocaleString() :
+                    'N/A'}</span></div>
+            <div><strong>Completed:</strong> <span>${scan.completed ? new Date(scan.completed).toLocaleString() :
+                    'N/A'}</span></div>
+        </div>
+        <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+            <h4 class="font-semibold mb-2">Failure Reason</h4>
+            <pre
+                class="whitespace-pre-wrap break-all text-xs max-h-24 overflow-auto">${scan.failureReason ? JSON.stringify(scan.failureReason, null, 2) : 'None'}</pre>
+        </div>
+        `;
+
+        // Fetch and render matches
+        const matchesRes = await api.run('listDatasetMatches', { scanId: scanId });
+        if (!matchesRes.success) throw new Error(matchesRes.message);
+        renderDatasetMatches(matchesRes.data, scanId);
+
+        } catch (err) {
+        contentDiv.innerHTML = `<p class="text-red-500">Error loading details: ${err.message}</p>`;
+        matchesBody.innerHTML = `<tr>
+            <td colspan="5" class="text-center text-red-500">Error loading matches.</td>
+        </tr>`;
+        }
+        }
+
+        function resolveMatch(matchId, scanId, resolution, needsNote = false) {
+        let note = '';
+        if (needsNote) {
+        note = prompt(`Enter a note for this resolution (${resolution}):`, "");
+        if (note === null) return; // User cancelled
+        }
+
+        const body = { userActionNeeded: false, userActionResolution: resolution, userActionResolutionNote: note };
+        api.run('patchDatasetMatch', matchId, body).then(res => { if (res.success) { showMessage('Match resolved
+        successfully.'); viewScanDetails(scanId); } else { showMessage(res.message, true); } }).catch(err =>
+        showMessage(err.message, true));
+        }
+
+
+        function renderAlerts(alerts) {
+        const tableBody = document.getElementById('alertsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!alerts || alerts.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="5" class="text-center text-gray-500">No alerts found.</td>
+        </tr>';
+        return;
+        }
+        alerts.forEach(alert => {
+        const row = tableBody.insertRow();
+        row.insertCell().textContent = new Date(alert.timestamp).toLocaleString();
+        row.insertCell().textContent = alert.type;
+        row.insertCell().textContent = alert.entityName || alert.providerId || alert.facilityId || 'N/A';
+        row.insertCell().textContent = alert.data.messageTemplate || JSON.stringify(alert.data);
+        const actionsCell = row.insertCell();
+        if (!alert.dismissalTimestamp) {
+        actionsCell.innerHTML = `<button onclick="dismissAlert('${alert.id}')"
+            class="btn-secondary text-xs px-2 py-1">Dismiss</button>`;
+        } else {
+        actionsCell.innerHTML = `<span class="text-xs text-gray-500" title="${alert.dismissalNote || ''}">Dismissed on
+            ${new Date(alert.dismissalTimestamp).toLocaleDateString()}</span>`;
+        }
+        });
+        }
+
+        function renderFiles(files) {
+        const tableBody = document.getElementById('filesTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+        if (!files || files.length === 0) {
+        tableBody.innerHTML = '<tr>
+            <td colspan="6" class="text-center text-gray-500">No files found.</td>
+        </tr>';
+        return;
+        }
+        files.forEach(file => {
+        const row = tableBody.insertRow();
+        const fileName = file.path ? decodeURIComponent(file.path.substring(file.path.lastIndexOf('/') + 1)) : 'N/A';
+        row.insertCell().textContent = fileName;
+        let entityLink = 'Unlinked';
+        if (file.entityType === 'Provider') { entityLink = `Provider: <a href="#"
+            onclick="viewProviderDetails('${file.providerId}')"
+            class="text-blue-600 hover:underline">${file.entityName}</a>`; }
+        else if (file.entityType === 'Facility') { entityLink = `Facility: <a href="#"
+            onclick="viewFacilityDetails('${file.facilityId}')"
+            class="text-blue-600 hover:underline">${file.entityName}</a>`; }
+        row.insertCell().innerHTML = entityLink;
+        row.insertCell().textContent = file.createdByUserEmail || 'N/A';
+        row.insertCell().textContent = file.createdAt ? new Date(file.createdAt).toLocaleString() : 'N/A';
+        row.insertCell().textContent = file.size ? (file.size / 1024).toFixed(2) : 'N/A';
+        row.insertCell().innerHTML = `<a href="${file.path}" target="_blank" rel="noopener noreferrer"
+            class="text-green-600 hover:underline text-xs mr-2">Download</a><button
+            onclick="viewFileDetails('${file.id}')" class="text-blue-500 hover:underline text-xs mr-2">View</button>`;
+        });
+        }
+
+        // --- UI Component Renderers (Modals, Tables, etc.) ---
+        function renderPagination(type, currentPage, pageSize, totalRecords) {
+        const paginationContainer = document.getElementById(`${type}Pagination`);
+        if (!paginationContainer) return; // Ensure paginationContainer exists
+        const totalPages = Math.ceil(totalRecords / pageSize);
+        if (totalPages <= 1) { paginationContainer.innerHTML='' ; return; } const prevDisabled=currentPage===1
+            ? 'disabled' : '' ; const nextDisabled=currentPage>= totalPages ? 'disabled' : '';
+            let loadFunc;
+            if (type === 'provider') loadFunc = 'loadProviders';
+            else if (type === 'facility') loadFunc = 'loadFacilities';
+            else if (type === 'notes') loadFunc = 'loadAllNotes';
+            else if (type === 'auditLog') loadFunc = 'loadEventLogEntries';
+            else if (type === 'profileImports') loadFunc = 'loadProfileImports';
+            else if (type === 'files') loadFunc = 'loadFiles';
+            else if (type === 'alerts') loadFunc = 'loadAlerts';
+            else if (type === 'webhooks') loadFunc = 'loadWebhooks';
+            else if (type === 'monitors') loadFunc = 'loadMonitors';
+            else if (type === 'datasetScans') loadFunc = 'loadDatasetScans';
+            else if (type === 'reports') loadFunc = 'loadGeneratedReports';
+            else if (type === 'providerLicenses') loadFunc = 'loadProviderLicenses';
+            else return;
+            paginationContainer.innerHTML = `<button onclick="${loadFunc}(${currentPage - 1})"
+                class="btn-secondary text-sm" ${prevDisabled}>&laquo; Previous</button><span
+                class="text-sm text-gray-700">Page ${currentPage} of ${totalPages} (${totalRecords}
+                records)</span><button onclick="${loadFunc}(${currentPage + 1})" class="btn-secondary text-sm"
+                ${nextDisabled}>Next &raquo;</button>`;
+            }
+            function renderTableHeaders(type) {
+            const headersConfig = {
+            provider: [{ key: 'id', label: 'ID' }, { key: 'firstName', label: 'First Name' }, { key: 'lastName', label:
+            'Last Name' }, { key: 'npi', label: 'NPI' }, { key: 'nextCredentialingDate', label: 'Next Credentialing
+            Date' }, { key: 'credentialingStatus', label: 'Status' }, { key: 'deactivated', label: 'Deactivated' }, {
+            key: null, label: 'Actions' }],
+            facility: [{ key: 'id', label: 'ID' }, { key: 'name', label: 'Name' }, { key: 'city', label: 'City' }, {
+            key: 'state', label: 'State' }, { key: 'deactivated', label: 'Deactivated' }, { key: null, label: 'Actions'
+            }]
+            };
+            const currentHeaders = headersConfig[type] || [];
+            const headElement = document.getElementById(`${type}TableHead`);
+            if (!headElement) return; // Ensure headElement exists
+
+            headElement.innerHTML = '';
+            const headerRow = headElement.insertRow();
+            if (type === 'provider') {
+            headerRow.insertCell().innerHTML = `<input type="checkbox" onchange="handleSelectAllProviders(this)"
+                title="Select All">`;
+            }
+            currentHeaders.forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header.label;
+            if (header.key) {
+            th.style.cursor = 'pointer';
+            th.onclick = () => setSort(type, header.key);
+            const currentSortBy = state[type].sortBy;
+            const currentSortOrder = state[type].sortOrder;
+            if (header.key === currentSortBy) th.innerHTML += currentSortOrder === 'asc' ? ' &#9650;' : ' &#9660;';
+            }
+            headerRow.appendChild(th);
+            });
+            }
+            function createDetailSection(title, data, keys) {
+            const section = document.createElement('div');
+            section.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">${title}</h3>`;
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm';
+            keys.forEach(key => {
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            let value = data[key];
+            if (key.toLowerCase().includes('date') && value) value = new Date(value).toLocaleDateString();
+            grid.innerHTML += `<div><strong>${label}:</strong> <span>${value || 'N/A'}</span></div>`;
+            });
+            section.appendChild(grid);
+            return section;
+            }
+
+            /**
+            * Creates a filter input element for a modal table.
+            * @param {string} title - The title of the section, used for placeholder text.
+            * @param {string} tableId - The ID of the table this filter will control.
+            * @returns {HTMLElement} The container div for the filter input.
+            */
+            function createTableFilter(title, tableId) {
+            const filterInputId = `filter-input-${tableId}`;
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'my-2';
+            filterContainer.innerHTML = `<label for="${filterInputId}" class="sr-only">Filter ${title}</label>
+            <input type="text" id="${filterInputId}" onkeyup="filterModalTable('${filterInputId}', '${tableId}')"
+                placeholder="Filter ${title}..." class="text-sm p-1 rounded-md border-gray-300 w-full md:w-1/2">`;
+            return filterContainer;
+            }
+
+            /**
+            * Creates the main table element with its header row.
+            * @param {string} tableId - The ID for the new table.
+            * @param {Array<object>} columns - The column configuration array.
+                * @returns {HTMLTableElement} The created table element with its header.
+                */
+                function createTableElement(tableId, columns) {
+                const table = document.createElement('table');
+                table.id = tableId;
+                table.className = 'min-w-full text-sm';
+
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                columns.forEach(colConfig => {
+                const th = document.createElement('th');
+                th.textContent = colConfig.header || colConfig.key.replace(/([A-Z])/g, ' ').replace(/^./, str =>
+                str.toUpperCase());
+                headerRow.appendChild(th);
+                }); // Fixed: Added missing closing brace for forEach
+
+                table.createTBody(); // Create empty tbody to be populated later
+                return table;
+                }
+
+                /**
+                * Renders the content for a single table cell based on the column configuration.
+                * @param {HTMLTableCellElement} cell - The cell element to render into.
+                * @param {object} item - The data object for the current row.
+                * @param {object} colConfig - The configuration for the current column.
+                * @param {string} schemaName - The schema name for generating action buttons.
+                * @param {string} entityId - The parent entity's ID.
+                */
+                function renderTableCell(cell, item, colConfig, schemaName, entityId) {
+                if (colConfig.isAction) {
+                const schema = formSchemas[schemaName];
+                let deleteButtonHtml = '';
+                if (schema && schema.deleteApi) { // Null check for schema
+                deleteButtonHtml = `<button
+                    onclick="deleteDynamicFormEntity('${schemaName}', '${item.id}', '${entityId}')"
+                    class="text-red-600 hover:underline text-xs">Delete</button>`;
+                }
+                cell.innerHTML = `<button
+                    onclick="openDynamicFormModal('${schemaName}', '${entityId}', '${encodeURIComponent(JSON.stringify(item))}')"
+                    class="text-blue-600 hover:underline text-xs mr-2">Edit</button>${deleteButtonHtml}`;
+                } else if (colConfig.render) {
+                cell.innerHTML = colConfig.render(item);
+                } else {
+                let value = item[colConfig.key];
+                if (colConfig.isDate && value) {
+                value = new Date(value).toLocaleDateString();
+                }
+                cell.textContent = value !== undefined && value !== null ? value : 'N/A';
+                }
+                }
+
+                /**
+                * Populates the body of a table with data rows.
+                * @param {HTMLTableSectionElement} tbody - The tbody element to populate.
+                * @param {Array<object>} dataArray - The array of data objects.
+                    * @param {Array<object>} columns - The column configuration array.
+                        * @param {string} schemaName - The schema name for generating action buttons.
+                        * @param {string} entityId - The parent entity's ID.
+                        */
+                        function createDetailTable(config) {
+                        const { title, schemaName, dataArray, entityId, columns, showAddButton = true } = config;
+
+                        const section = document.createElement('div');
+                        section.innerHTML = `<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">
+                        </h3>`;
+
+                        const sanitizedTitle = title.replace(/\s+/g, '-').toLowerCase();
+                        const tableId = `table--${entityId || 'modal'}`;
+
+                        // Add filter only if there's data to filter
+                        if (dataArray && dataArray.length > 0) {
+                        section.appendChild(createTableFilter(title, tableId));
+                        }
+
+                        const table = createTableElement(tableId, columns);
+                        // The populate function now handles the "no data" message inside the tbody
+                        populateTableBody(table.tBodies[0], dataArray, columns, schemaName, entityId);
+
+                        const tableContainer = document.createElement('div');
+                        tableContainer.className = 'overflow-x-auto';
+                        tableContainer.appendChild(table);
+                        section.appendChild(tableContainer);
+
+                        // Add the "Add" button if applicable
+                        if (showAddButton && schemaName) {
+                        section.appendChild(createAddButton(title, schemaName, entityId));
+                        }
+
+                        return section;
+                        }
+
+                        /**
+                        * Populates the body of a table with data rows, or a "no data" message.
+                        * @param {HTMLTableSectionElement} tbody - The tbody element to populate.
+                        * @param {Array<object>} dataArray - The array of data objects.
+                            * @param {Array<object>} columns - The column configuration array.
+                                * @param {string} schemaName - The schema name for generating action buttons.
+                                * @param {string} entityId - The parent entity's ID.
+                                */
+                                function populateTableBody(tbody, dataArray, columns, schemaName, entityId) {
+                                tbody.innerHTML = ''; // Clear previous content
+
+                                if (!dataArray || dataArray.length === 0) {
+                                const cell = tbody.insertRow().insertCell();
+                                cell.colSpan = columns.length;
+                                cell.className = 'text-center text-gray-500 py-4';
+                                cell.textContent = 'No data available.';
+                                return;
+                                }
+
+                                dataArray.forEach(item => {
+                                const row = tbody.insertRow();
+                                columns.forEach(colConfig => {
+                                const cell = row.insertCell();
+                                renderTableCell(cell, item, colConfig, schemaName, entityId);
+                                });
+                                });
+                                }
+
+                                /**
+                                * Creates an "Add" button for a detail table.
+                                * @param {string} title - The title of the section, used for the button text.
+                                * @param {string} schemaName - The schema name to use for the add modal.
+                                * @param {string} entityId - The parent entity's ID.
+                                * @returns {HTMLButtonElement} The created button element.
+                                */
+                                function createAddButton(title, schemaName, entityId) {
+                                const addButton = document.createElement('button');
+                                addButton.className = 'btn-primary text-sm mt-2';
+                                addButton.textContent = `Add ${title}`;
+                                addButton.onclick = () => openDynamicFormModal(schemaName, entityId, null);
+                                return addButton;
+                                }
+
+                                function createFileManagementSection(files, entityType, entityId) {
+                                const section = createDetailTable({
+                                title: 'Files',
+                                dataArray: files,
+                                entityId: entityId,
+                                columns: [
+                                { header: 'Path', key: 'path', render: (item) => `<a href="#"
+                                    onclick="event.preventDefault(); viewFileDetails('${item.id}')"
+                                    class="text-blue-600 hover:underline">${decodeURIComponent(item.path.substring(item.path.lastIndexOf('/')
+                                    + 1))}</a>` },
+                                { header: 'Created At', key: 'createdAt', isDate: true },
+                                { header: 'Size (KB)', key: 'size', render: (item) => item.size ? (item.size /
+                                1024).toFixed(2) : 'N/A' },
+                                { header: 'Actions', key: 'id', render: (item) => `<button
+                                    onclick="deleteFileFromModal('${item.id}', '${entityType}', '${entityId}')"
+                                    class="btn-danger text-xs px-2 py-1">Delete</button>` }
+                                ],
+                                showAddButton: false // Explicitly disable the default "Add" button
+                                });
+                                const uploadForm = document.createElement('div');
+                                uploadForm.className = 'mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50';
+                                uploadForm.innerHTML = `<h4 class="text-lg font-semibold text-gray-700 mb-2">Upload New
+                                    File</h4><input type="file" id="entityFileInput-${entityId}" class="mb-2"><button
+                                    onclick="uploadFileToEntity('${entityType}', '${entityId}')"
+                                    class="btn-primary text-sm">Upload</button>
+                                <div id="uploadStatus-${entityId}" class="text-sm text-gray-600 mt-2"></div>`;
+                                section.appendChild(uploadForm);
+                                return section;
+                                }
+                                function createNotesSection(notes, entityType, entityId) {
+                                const columns = [
+                                { header: 'Note', key: 'note', render: (item) => `<p class="whitespace-pre-wrap">
+                                    ${item.note}</p>` },
+                                { header: 'User', key: 'userEmail' },
+                                { header: 'Timestamp', key: 'timestamp', isDate: true, render: (item) => new
+                                Date(item.timestamp).toLocaleString() },
+                                ];
+
+                                const section = createDetailTable({
+                                title: 'Notes',
+                                dataArray: notes,
+                                entityId: entityId,
+                                columns: columns,
+                                showAddButton: false // We will add a custom "add" form
+                                });
+
+                                const addNoteForm = document.createElement('div');
+                                addNoteForm.className = 'mt-4 p-4 border-t';
+                                addNoteForm.innerHTML = `
+                                <h4 class="text-md font-semibold text-gray-700 mb-2">Add New Note</h4>
+                                <textarea id="newNoteText-${entityId}" class="w-full text-sm rounded-lg" rows="3"
+                                    placeholder="Add a new note..."></textarea>
+                                <button onclick="addNoteToEntity('${entityType}', '${entityId}')"
+                                    class="btn-primary text-sm mt-2">Add Note</button>
+                                `;
+                                section.appendChild(addNoteForm);
+                                return section;
+                                }
+
+                                function populateChecklistTable(items, requestId) {
+                                const tableBody = document.getElementById('requestChecklistTableBody');
+                                if (!tableBody) return;
+
+                                tableBody.innerHTML = '';
+                                if (!items || items.length === 0) {
+                                tableBody.innerHTML = '<tr>
+                                    <td colspan="5" class="text-center text-gray-500">No checklist items found.</td>
+                                </tr>';
+                                } else {
+                                items.forEach(item => {
+                                const row = tableBody.insertRow();
+                                row.insertCell().textContent = item.name;
+                                row.insertCell().textContent = item.status;
+                                row.insertCell().textContent = item.confirmedBy || 'N/A';
+                                row.insertCell().textContent = item.confirmedAt ? new
+                                Date(item.confirmedAt).toLocaleDateString() : 'N/A';
+
+                                const itemJson = encodeURIComponent(JSON.stringify(item));
+                                row.insertCell().innerHTML = `
+                                <button
+                                    onclick="openDynamicFormModal('credentialingChecklistItem', '${requestId}', '${itemJson}')"
+                                    class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                                <button onclick="deleteChecklistItem('${item.id}', '${requestId}')"
+                                    class="text-red-600 hover:underline text-xs">Delete</button>
+                                `;
+                                });
+                                }
+                                // Add "Add Item" button at the bottom of the section
+                                const checklistSection = tableBody.closest('div.overflow-x-auto');
+                                const existingButton = checklistSection.nextElementSibling;
+                                if (!existingButton || !existingButton.matches('.add-checklist-item-btn')) {
+                                checklistSection.insertAdjacentHTML('afterend', `<button
+                                    onclick="openDynamicFormModal('credentialingChecklistItem', '${requestId}', null)"
+                                    class="btn-primary text-sm mt-2 add-checklist-item-btn">Add Checklist
+                                    Item</button>`);
+                                }
+                                }
+
+                                /**
+                                * Loads credentialing tasks assigned to the current user.
+                                */
+                                async function loadMyTasks() {
+                                const listEl = document.getElementById('listMyTasks');
+                                if (listEl) listEl.innerHTML = '<li class="text-gray-500">Loading my tasks...</li>';
+
+                                try {
+                                const response = await api.run('listMyCredentialingTasks');
+                                if (response.success) {
+                                state.myTasks.data = response.data;
+                                state.myTasks.totalRecords = response.totalRecords;
+                                const metricMyOpenTasks = document.getElementById('metricMyOpenTasks');
+                                if (metricMyOpenTasks) metricMyOpenTasks.textContent = response.totalRecords;
+                                renderMyTasks(response.data);
+                                } else {
+                                showMessage(response.message, true);
+                                if (listEl) listEl.innerHTML = `<li class="text-red-500">${response.message}</li>`;
+                                }
+                                } catch (err) {
+                                showMessage(err.message, true);
+                                if (listEl) listEl.innerHTML = `<li class="text-red-500">${err.message}</li>`;
+                                }
+                                }
+
+                                /**
+                                * Renders the list of tasks assigned to the current user on the dashboard.
+                                * @param {Array<object>} tasks - The array of task objects (credentialing requests).
+                                    */
+                                    function renderMyTasks(tasks) {
+                                    const listEl = document.getElementById('listMyTasks');
+                                    if (!listEl) return; // Ensure listEl exists
+                                    listEl.innerHTML = ''; // Clear existing tasks
+                                    if (tasks.length === 0) { listEl.innerHTML = '<li class="text-gray-500">No tasks
+                                        assigned to you.</li>'; return; }
+                                    tasks.forEach(task => {
+                                    const li = document.createElement('li');
+                                    li.className = 'py-2 border-b border-gray-200 last:border-b-0';
+                                    li.innerHTML = `
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-medium text-gray-800">${task.type} Request for
+                                            ${task.entityName || 'N/A'}</span>
+                                        <span class="text-xs text-gray-500">${new
+                                            Date(task.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div class="text-sm text-gray-600">Status: ${task.status}</div>
+                                    <button onclick="viewCredentialingRequest('${task.id}')"
+                                        class="text-blue-600 hover:underline text-xs mt-1">View Details</button>
+                                    `;
+                                    listEl.appendChild(li);
+                                    });
+                                    }
+
+
+                                    // --- Modal Content Renderers ---
+                                    async function viewProviderDetails(providerId) {
+                                    openModal('providerDetailsModal');
+                                    const contentDiv = document.getElementById('providerDetailsContent');
+                                    if (contentDiv) contentDiv.innerHTML = '<p class="text-center">Loading provider
+                                        details...</p>'; // Null check
+                                    try {
+                                    const response = await api.run('getProviderDetails', providerId);
+                                    if (response.success) {
+                                    const provider = response.data;
+                                    const providerDetailsModal = document.getElementById('providerDetailsModal');
+                                    if (providerDetailsModal) providerDetailsModal.dataset.providerId = provider.id; //
+                                    Null check
+                                    const modalProviderName = document.getElementById('modalProviderName');
+                                    if (modalProviderName) modalProviderName.textContent = `${provider.firstName}
+                                    ${provider.lastName}`; // Null check
+                                    if (contentDiv) contentDiv.innerHTML = ''; // Null check
+                                    if (contentDiv) contentDiv.appendChild(createDetailSection('Basic Information',
+                                    provider, ['id', 'npi', 'credentialingStatus', 'nextCredentialingDate'])); // Null
+                                    check
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Aliases',
+                                    schemaName: 'providerAlias', dataArray: provider.aliases, entityId: provider.id,
+                                    columns: [{ header: 'First Name', key: 'firstName' }, { header: 'Last Name', key:
+                                    'lastName' }, { header: 'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Addresses',
+                                    schemaName: 'providerAddress', dataArray: provider.addresses, entityId: provider.id,
+                                    columns: [{ header: 'Type', key: 'type' }, { header: 'Address', key: 'addressLine1'
+                                    }, { header: 'City', key: 'city' }, { header: 'State', key: 'state' }, { header:
+                                    'Zip', key: 'zipCode' }, { header: 'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Emails',
+                                    schemaName: 'providerEmail', dataArray: provider.emails, entityId: provider.id,
+                                    columns: [{ header: 'Type', key: 'type' }, { header: 'Email', key: 'email' }, {
+                                    header: 'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Education',
+                                    schemaName: 'providerEducation', dataArray: provider.education, entityId:
+                                    provider.id, columns: [{ header: 'School', key: 'schoolName' }, { header: 'Degree',
+                                    key: 'degree' }, { header: 'End Date', key: 'endDate', isDate: true }, { header:
+                                    'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Training',
+                                    schemaName: 'providerTraining', dataArray: provider.training, entityId: provider.id,
+                                    columns: [{ header: 'Institution', key: 'institutionName' }, { header: 'Speciality',
+                                    key: 'speciality' }, { header: 'Type', key: 'trainingType' }, { header: 'End Date',
+                                    key: 'endDate', isDate: true }, { header: 'Actions', key: 'id', isAction: true }]
+                                    }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Work History',
+                                    schemaName: 'providerWorkHistory', dataArray: provider.workHistory, entityId:
+                                    provider.id, columns: [{ header: 'Employer', key: 'name' }, { header: 'Job Title',
+                                    key: 'jobTitle' }, { header: 'End Date', key: 'endDate', isDate: true }, { header:
+                                    'Current', key: 'isCurrentEmployer', render: (item) => item.isCurrentEmployer ?
+                                    'Yes' : 'No' }, { header: 'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Board
+                                    Certifications', schemaName: 'providerBoardCertification', dataArray:
+                                    provider.boardCertifications, entityId: provider.id, columns: [{ header: 'Board',
+                                    key: 'type' }, { header: 'Specialty', key: 'specialty' }, { header: 'Expires', key:
+                                    'expirationDate', isDate: true }, { header: 'Actions', key: 'id', isAction: true }]
+                                    }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'DEA
+                                    Registrations', schemaName: 'providerDea', dataArray: provider.deaRegistrations,
+                                    entityId: provider.id, columns: [{ header: 'Number', key: 'registrationNumber' }, {
+                                    header: 'Last Updated', key: 'lastUpdatedAt', isDate: true }, { header: 'Actions',
+                                    key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Certificates',
+                                    schemaName: 'providerCertificate', dataArray: provider.certificates, entityId:
+                                    provider.id, columns: [{ header: 'Type', key: 'type' }, { header: 'Number', key:
+                                    'certificateNumber' }, { header: 'Expires', key: 'expirationDate', isDate: true }, {
+                                    header: 'Actions', key: 'id', isAction: true }] }));
+
+                                    const caqhSection = document.createElement('div');
+                                    const caqhInfo = provider.caqhInfo && provider.caqhInfo.length > 0 ?
+                                    provider.caqhInfo[0] : null;
+                                    caqhSection.innerHTML = `<h3
+                                        class="text-xl font-semibold text-gray-700 mb-2 mt-4 border-b pb-1">CAQH
+                                        Information</h3>`;
+                                    if (caqhInfo) {
+                                    caqhSection.innerHTML += `<div
+                                        class="text-sm p-2 bg-gray-50 rounded-lg flex justify-between items-center">
+                                        <div><strong>CAQH ID:</strong> ${caqhInfo.caqhId} <span
+                                                class="text-xs text-gray-500 ml-2">(Last Updated: ${new
+                                                Date(caqhInfo.lastUpdatedAt).toLocaleDateString()})</span></div>
+                                        <div>
+                                            <button
+                                                onclick="openDynamicFormModal('providerCaqh', '${provider.id}', '${encodeURIComponent(JSON.stringify(caqhInfo))}')"
+                                                class="text-blue-600 hover:underline text-xs mr-2">Edit</button>
+                                            <button
+                                                onclick="deleteDynamicFormEntity('providerCaqh', '${caqhInfo.id}', '${provider.id}')"
+                                                class="text-red-600 hover:underline text-xs">Delete</button>
+                                        </div>
+                                    </div>`;
+                                    } else {
+                                    caqhSection.innerHTML += `<p class="text-sm text-gray-500">No CAQH information
+                                        found.</p>
+                                    <button onclick="openDynamicFormModal('providerCaqh', '${provider.id}', null)"
+                                        class="btn-primary text-sm mt-2">Add CAQH Info</button>`;
+                                    }
+                                    if (contentDiv) contentDiv.appendChild(caqhSection); // Null check
+
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Liability
+                                    Insurance', schemaName: 'providerLiabilityInsurance', dataArray:
+                                    provider.liabilityInsurances, entityId: provider.id, columns: [{ header: 'Insurer',
+                                    key: 'name' }, { header: 'Policy #', key: 'policyNumber' }, { header: 'Expires',
+                                    key: 'currentExpirationDate', isDate: true }, { header: 'Actions', key: 'id',
+                                    isAction: true }] }));
+
+                                    const licenseSection = createDetailTable({
+                                    title: 'Licenses',
+                                    dataArray: provider.licenses,
+                                    entityId: provider.id,
+                                    columns: [
+                                    { header: 'Number', key: 'licenseNumber' },
+                                    { header: 'State', key: 'state' },
+                                    { header: 'Expires', key: 'nonVerifiedExpirationDate', isDate: true },
+                                    { header: 'Status', key: 'currentVerificationStatus' },
+                                    { header: 'Actions', key: 'id', isAction: true } // This will generate standard
+                                    Edit/Delete buttons
+                                    ],
+                                    schemaName: 'providerLicense' // Add a schema name
+                                    });
+                                    const addLicenseButton = document.createElement('button');
+                                    addLicenseButton.className = 'btn-primary text-sm mt-2';
+                                    addLicenseButton.textContent = 'Attach License';
+                                    addLicenseButton.onclick = () => openLicenseModal(null, provider.id);
+                                    licenseSection.appendChild(addLicenseButton);
+                                    if (contentDiv) contentDiv.appendChild(licenseSection); // Null check
+                                    if (contentDiv) contentDiv.appendChild(createFileManagementSection(provider.files,
+                                    'provider', provider.id)); // Null check
+                                    if (contentDiv) contentDiv.appendChild(createNotesSection(provider.notes,
+                                    'provider', provider.id)); // Null check
+                                    const footer = document.getElementById('providerDetailsFooter');
+                                    if (footer) footer.innerHTML = `<button
+                                        onclick="createRequestFromModal('provider', '${provider.id}')"
+                                        class="btn-primary">Create Credentialing Request</button><button
+                                        onclick="closeModal('providerDetailsModal')"
+                                        class="btn-secondary">Close</button>`; // Null check
+                                    } else {
+                                    if (contentDiv) contentDiv.innerHTML = `<p class="text-center text-red-500">
+                                        ${response.message}</p>`; // Null check
+                                    }
+                                    } catch (err) {
+                                    if (contentDiv) contentDiv.innerHTML = `<p class="text-center text-red-500">
+                                        ${err.message}</p>`; // Null check
+                                    }
+                                    }
+                                    async function viewFacilityDetails(facilityId) {
+                                    openModal('facilityDetailsModal');
+                                    const contentDiv = document.getElementById('facilityDetailsContent');
+                                    if (contentDiv) contentDiv.innerHTML = '<p class="text-center">Loading facility
+                                        details...</p>'; // Null check
+                                    try {
+                                    const response = await api.run('getFacilityDetails', facilityId);
+                                    if (response.success) {
+                                    const facility = response.data;
+                                    const facilityDetailsModal = document.getElementById('facilityDetailsModal');
+                                    if (facilityDetailsModal) facilityDetailsModal.dataset.facilityId = facility.id; //
+                                    Null check
+                                    const modalFacilityName = document.getElementById('modalFacilityName');
+                                    if (modalFacilityName) modalFacilityName.textContent = facility.name; // Null check
+                                    if (contentDiv) contentDiv.innerHTML = ''; // Null check
+                                    if (contentDiv) contentDiv.appendChild(createDetailSection('Basic Information',
+                                    facility, ['id', 'dba', 'phoneNumber', 'faxNumber', 'contactName',
+                                    'contactEmail'])); // Null check
+
+                                    // Systematically add all sub-entity tables
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Specialties',
+                                    schemaName: 'facilitySpecialty', dataArray: facility.specialties, entityId:
+                                    facility.id, columns: [{ header: 'Taxonomy', key: 'taxonomyName' }, { header:
+                                    'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'NPIs',
+                                    schemaName: 'facilityNpi', dataArray: facility.npis, entityId: facility.id, columns:
+                                    [{ header: 'NPI', key: 'npi' }, { header: 'Is Active', key: 'isActive', render:
+                                    (item) => item.isActive ? 'Yes' : 'No' }, { header: 'Actions', key: 'id', isAction:
+                                    true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'DEAs',
+                                    schemaName: 'facilityDea', dataArray: facility.deas, entityId: facility.id, columns:
+                                    [{ header: 'DEA Number', key: 'deaNumber' }, { header: 'State', key: 'state' }, {
+                                    header: 'Expires', key: 'expirationDate', isDate: true }, { header: 'Is Active',
+                                    key: 'isActive', render: (item) => item.isActive ? 'Yes' : 'No' }, { header:
+                                    'Actions', key: 'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Licenses',
+                                    schemaName: 'facilityLicense', dataArray: facility.licenses, entityId: facility.id,
+                                    columns: [{ header: 'Number', key: 'licenseNumber' }, { header: 'State', key:
+                                    'state' }, { header: 'Status', key: 'licenseStatus' }, { header: 'Expires', key:
+                                    'expirationDate', isDate: true }, { header: 'Actions', key: 'id', isAction: true }]
+                                    }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Liability
+                                    Insurance', schemaName: 'facilityLiabilityInsurance', dataArray:
+                                    facility.liabilityInsurances, entityId: facility.id, columns: [{ header: 'Insurer',
+                                    key: 'name' }, { header: 'Policy #', key: 'policyNumber' }, { header: 'Expires',
+                                    key: 'currentExpirationDate', isDate: true }, { header: 'Actions', key: 'id',
+                                    isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Accreditations',
+                                    schemaName: 'facilityAccreditation', dataArray: facility.accreditations, entityId:
+                                    facility.id, columns: [{ header: 'Agency', key: 'agency' }, { header: 'Program',
+                                    key: 'program' }, { header: 'Decision', key: 'decision' }, { header: 'Expires', key:
+                                    'expirationDate', isDate: true }, { header: 'Actions', key: 'id', isAction: true }]
+                                    }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'CMS
+                                    Certifications', schemaName: 'facilityCms', dataArray: facility.cmsCertifications,
+                                    entityId: facility.id, columns: [{ header: 'Number', key: 'certificationNumber' }, {
+                                    header: 'Date', key: 'certificationDate', isDate: true }, { header: 'Actions', key:
+                                    'id', isAction: true }] }));
+                                    if (contentDiv) contentDiv.appendChild(createDetailTable({ title: 'Medicare
+                                    Enrollments', schemaName: 'facilityMedicareEnrollment', dataArray:
+                                    facility.medicareEnrollments, entityId: facility.id, columns: [{ header: 'Number',
+                                    key: 'medicareNumber' }, { header: 'Status', key: 'enrollmentStatus' }, { header:
+                                    'Effective Date', key: 'effectiveDate', isDate: true }, { header: 'Actions', key:
+                                    'id', isAction: true }] }));
+
+                                    // Add File and Notes sections
+                                    if (contentDiv) contentDiv.appendChild(createFileManagementSection(facility.files,
+                                    'facility', facility.id));
+                                    if (contentDiv) contentDiv.appendChild(createNotesSection(facility.notes,
+                                    'facility', facility.id));
+
+                                    const footer = document.getElementById('facilityDetailsFooter');
+                                    if (footer) footer.innerHTML = `<button
+                                        onclick="createRequestFromModal('facility', '${facility.id}')"
+                                        class="btn-primary">Create Credentialing Request</button><button
+                                        onclick="closeModal('facilityDetailsModal')"
+                                        class="btn-secondary">Close</button>`; // Null check
+                                    } else {
+                                    if (contentDiv) contentDiv.innerHTML = `<p class="text-center text-red-500">
+                                        ${response

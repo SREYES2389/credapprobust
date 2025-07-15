@@ -1,0 +1,207 @@
+<script>
+    // =================================================================
+    // 4. UI & GENERAL FUNCTIONS
+    // =================================================================
+
+    /**
+     * Shows a specific tab and hides others.
+     * @param {string} tabName - The ID of the tab content to show.
+     */
+    function showTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+        // Find the clicked tab link by iterating through all tab links
+        const clickedTabLink = Array.from(document.querySelectorAll('.tab-link')).find(link =>
+            link.textContent.toLowerCase().includes(tabName.toLowerCase()));
+        if (clickedTabLink) {
+            clickedTabLink.classList.add('active');
+        }
+        const tabContent = document.getElementById(tabName);
+        if (tabContent) { // Add null check for tabContent
+            tabContent.classList.add('active');
+        }
+    }
+
+    /**
+     * Displays a temporary message to the user.
+     * @param {string} message - The message to display.
+     * @param {boolean} [isError=false] - If true, displays an error-styled box.
+     */
+    function showMessage(message, isError = false) {
+        const box = isError ? document.getElementById('errorBox') : document.getElementById('messageBox');
+        // Add null check for the message box element
+        if (box) {
+            box.textContent = message;
+            box.style.display = 'block';
+            setTimeout(() => {
+                box.style.display = 'none';
+            }, 5000);
+        } else {
+            // Fallback to console log if message boxes are not found (e.g., during very early init)
+            console.error(`Message Box Error (isError: ): `);
+        }
+    }
+
+    /**
+     * A generic success handler for API calls that perform saves or updates.
+     * @param {Function} [refreshFunc] - An optional function to run on success (e.g., to reload data).
+     * @param {Function} [clearFunc] - An optional function to run on success (e.g., to clear a form).
+     * @returns {Function} A success handler function.
+     */
+    function handleSaveResponse(refreshFunc, clearFunc) {
+        return function(res) {
+            if (res.success) {
+                showMessage(res.message, false);
+                if (refreshFunc) refreshFunc();
+                if (clearFunc) clearFunc();
+            } else {
+                showMessage(res.message, true);
+            }
+        }
+    }
+
+    /**
+     * Triggers a file download in the browser for a given CSV string.
+     * @param {string} filename - The desired filename for the downloaded file (e.g., "providers.csv").
+     * @param {string} csvString - The CSV data as a string.
+     */
+    function downloadCsvFile(filename, csvString) {
+        const blob = new Blob(["\uFEFF" + csvString], {
+            type: 'text/csv;charset=utf-8;'
+        }); // Add BOM for Excel
+        const link = document.createElement('a');
+        if (link.download !== undefined) { // Feature detection for download attribute
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url); // Clean up the URL object
+        } else {
+            // Fallback for older browsers or environments that don't support download attribute
+            showMessage('Your browser does not support direct CSV download. Please copy the data manually.', true);
+        }
+    }
+
+    // =================================================================
+    // 5. FORM & INPUT HANDLING - Clearing Forms
+    // =================================================================
+
+    /**
+     * Clears all input, select, and textarea fields within the main forms.
+     */
+    function clearForm() {
+        const providerId = document.getElementById('providerId');
+        if (providerId) providerId.value = '';
+        const firstName = document.getElementById('firstName');
+        if (firstName) firstName.value = '';
+        const lastName = document.getElementById('lastName');
+        if (lastName) lastName.value = '';
+        const npi = document.getElementById('npi');
+        if (npi) npi.value = '';
+        const nextCredentialingDate = document.getElementById('nextCredentialingDate');
+        if (nextCredentialingDate) nextCredentialingDate.value = '';
+        const credentialingStatus = document.getElementById('credentialingStatus');
+        if (credentialingStatus) credentialingStatus.value = 'Data Collection';
+        const deactivated = document.getElementById('deactivated');
+        if (deactivated) deactivated.checked = false;
+    }
+
+    function clearFacilityForm() {
+        const facilityId = document.getElementById('facilityId');
+        if (facilityId) facilityId.value = '';
+        const facilityName = document.getElementById('facilityName');
+        if (facilityName) facilityName.value = '';
+        const facilityDba = document.getElementById('facilityDba');
+        if (facilityDba) facilityDba.value = '';
+        const facilityAddressLine1 = document.getElementById('facilityAddressLine1');
+        if (facilityAddressLine1) facilityAddressLine1.value = '';
+        const facilityAddressLine2 = document.getElementById('facilityAddressLine2');
+        if (facilityAddressLine2) facilityAddressLine2.value = '';
+        const facilityCity = document.getElementById('facilityCity');
+        if (facilityCity) facilityCity.value = '';
+        const facilityState = document.getElementById('facilityState');
+        if (facilityState) facilityState.value = '';
+        const facilityZipCode = document.getElementById('facilityZipCode');
+        if (facilityZipCode) facilityZipCode.value = '';
+        const facilityPhoneNumber = document.getElementById('facilityPhoneNumber');
+        if (facilityPhoneNumber) facilityPhoneNumber.value = '';
+        const facilityFaxNumber = document.getElementById('facilityFaxNumber');
+        if (facilityFaxNumber) facilityFaxNumber.value = '';
+        const facilityContactName = document.getElementById('facilityContactName');
+        if (facilityContactName) facilityContactName.value = '';
+        const facilityContactEmail = document.getElementById('facilityContactEmail');
+        if (facilityContactEmail) facilityContactEmail.value = '';
+        const facilityDeactivated = document.getElementById('facilityDeactivated');
+        if (facilityDeactivated) facilityDeactivated.checked = false;
+    }
+
+    function clearGroupForm() {
+        const groupId = document.getElementById('groupId');
+        if (groupId) groupId.value = '';
+        const groupName = document.getElementById('groupName');
+        if (groupName) groupName.value = '';
+        const groupNpi = document.getElementById('groupNpi');
+        if (groupNpi) groupNpi.value = '';
+        const groupTaxId = document.getElementById('groupTaxId');
+        if (groupTaxId) groupTaxId.value = '';
+    }
+
+    function clearPayerForm() {
+        const payerId = document.getElementById('payerId');
+        if (payerId) payerId.value = '';
+        const payerName = document.getElementById('payerName');
+        if (payerName) payerName.value = '';
+    }
+
+    function clearPayerPlanForm() {
+        const planId = document.getElementById('planId');
+        if (planId) planId.value = '';
+        const planName = document.getElementById('planName');
+        if (planName) planName.value = '';
+        const planState = document.getElementById('planState');
+        if (planState) planState.value = '';
+    }
+
+    function clearEnrollmentForm() {
+        const enrollmentId = document.getElementById('enrollmentId');
+        if (enrollmentId) enrollmentId.value = '';
+        const enrollmentGroupId = document.getElementById('enrollmentGroupId');
+        if (enrollmentGroupId) enrollmentGroupId.value = '';
+        const enrollmentPayerPlanId = document.getElementById('enrollmentPayerPlanId');
+        if (enrollmentPayerPlanId) enrollmentPayerPlanId.value = '';
+        const effectiveDate = document.getElementById('effectiveDate');
+        if (effectiveDate) effectiveDate.value = '';
+        const enrollmentStatus = document.getElementById('enrollmentStatus');
+        if (enrollmentStatus) enrollmentStatus.value = 'NotSubmitted';
+        const networkStatus = document.getElementById('networkStatus');
+        if (networkStatus) networkStatus.value = 'None';
+        const specialistType = document.getElementById('specialistType');
+        if (specialistType) specialistType.value = 'None';
+        const submissionDate = document.getElementById('submissionDate');
+        if (submissionDate) submissionDate.value = '';
+        const closedDate = document.getElementById('closedDate');
+        if (closedDate) closedDate.value = '';
+        const externalProviderPlanId = document.getElementById('externalProviderPlanId');
+        if (externalProviderPlanId) externalProviderPlanId.value = '';
+        const enrollmentComments = document.getElementById('enrollmentComments');
+        if (enrollmentComments) enrollmentComments.value = '';
+    }
+
+    function clearWebhookForm() {
+        const webhookId = document.getElementById('webhookId');
+        if (webhookId) webhookId.value = '';
+        const webhookType = document.getElementById('webhookType');
+        if (webhookType) webhookType.value = '';
+        const webhookUrl = document.getElementById('webhookUrl');
+        if (webhookUrl) webhookUrl.value = '';
+        const webhookSecret = document.getElementById('webhookSecret');
+        if (webhookSecret) webhookSecret.value = '';
+        const webhookAllowInsecure = document.getElementById('webhookAllowInsecure');
+        if (webhookAllowInsecure) webhookAllowInsecure.checked = false;
+        const webhookIncludeSensitive = document.getElementById('webhookIncludeSensitive');
+        if (webhookIncludeSensitive) webhookIncludeSensitive.checked = false;
+    }
+</script>

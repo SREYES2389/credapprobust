@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unit Tests for generateFormFields</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .results {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+        }
+
+        .suite {
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .test {
+            margin-left: 20px;
+            margin-bottom: 5px;
+        }
+
+        .pass {
+            color: green;
+        }
+
+        .fail {
+            color: red;
+        }
+
+        pre {
+            background-color: #f4f4f4;
+            padding: 5px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Unit Tests for <code>generateFormFields</code></h1>
+    <div id="results" class="results"></div>
+
+    <script>
+        // =================================================================
+        // Function Under Test (Copied from JavaScript.html)
+        // =================================================================
+        function generateFormFields(fields) {
+            let html = '';
+            for (const [key, config] of Object.entries(fields)) {
+                const id = `dynamic-form-field-${key}`;
+                const required = config.required ? 'required' : '';
+                const colSpanClass = config.colSpan ? `md:col-span-${config.colSpan}` : 'md:col-span-1';
+                html += `<div class="${colSpanClass}">`;
+                html += `<label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${config.label}:</label>`;
+
+                if (config.type === 'select') {
+                    html += `<select id="${id}" ${required} class="rounded-lg w-full">`;
+                    if (config.options) { // Check if options exist
+                        for (const [val, text] of Object.entries(config.options)) {
+                            html += `<option value="${val}">${text}</option>`;
+                        }
+                    }
+                    html += `</select>`;
+                } else if (config.type === 'checkbox') {
+                    html += `<div class="flex items-center h-full"><input type="checkbox" id="${id}" class="rounded-md h-4 w-4"></div>`;
+                } else if (config.type === 'textarea') {
+                    html += `<textarea id="${id}" placeholder="${config.placeholder || ''}" ${required} rows="${config.rows || 3}" class="rounded-lg w-full"></textarea>`;
+                } else {
+                    html += `<input type="${config.type || 'text'}" id="${id}" placeholder="${config.placeholder || ''}" ${required} class="rounded-lg w-full">`;
+                }
+                html += `</div>`;
+            }
+            return html;
+        }
+
+        // =================================================================
+        // Simple Test Harness
+        // =================================================================
+        const testResults = [];
+
+        function describe(description, fn) {
+            testResults.push(`<div class="suite">${description}</div>`);
+            console.group(description);
+            fn();
+            console.groupEnd();
+        }
+
+        function it(description, fn) {
+            try {
+                fn();
+                testResults.push(`<div class="test pass">✓ ${description}</div>`);
+                console.log(`%c✓ ${description}`, 'color: green;');
+            } catch (error) {
+                testResults.push(`<div class="test fail">✗ ${description}<pre>${error.stack}</pre></div>`);
+                console.error(`✗ ${description}`);
+                console.error(error);
+            }
+        }
+
+        const expect = (actual) => ({
+            toContain: (expected) => {
+                if (!actual.includes(expected)) {
+                    throw new Error(`Expected:\n${actual}\n\nTo contain:\n${expected}`);
+                }
+            },
+            notToContain: (expected) => {
+                if (actual.includes(expected)) {
+                    throw new Error(`Expected:\n${actual}\n\nNot to contain:\n${expected}`);
+                }
+            },
+            toBe: (expected) => {
+                if (actual !== expected) {
+                    throw new Error(`Expected "${actual}" to be "${expected}"`);
+                }
+            }
+        });
+
+        // =================================================================
+        // Test Suites
+        // =================================================================
+
+        describe('generateFormFields', () => {
+
+            it('should return an empty string for empty fields object', () => {
+                const fields = {};
+                const result = generateFormFields(fields);
+                expect(result).toBe('');
+            });
+
+            it('should generate a basic text input field', () => {
+                const fields = {
+                    firstName: { label: 'First Name', type: 'text' }
+                };
+                const result = generateFormFields(fields);
+                expect(result).toContain('<label for="dynamic-form-field-firstName"');
+                expect(result).toContain('>First Name:</label>');
+                expect(result).toContain('<input type="text" id="dynamic-form-field-firstName"');
+                expect(result).notToContain('required');
+            });
+
+            it('should generate a required email input with a placeholder and colspan', () => {
+                const fields = {
+                    email: { label: 'Email Address', type: 'email', required: true, placeholder: 'user@example.com', colSpan: 2 }
+                };
+                const result = generateFormFields(fields);
+                expect(result).toContain('class="md:col-span-2"');
+                expect(result).toContain('<input type="email"');
+                expect(result).toContain('placeholder="user@example.com"');
+                expect(result).toContain('required');
+            });
+
+            it('should generate a select dropdown with options', () => {
+                const fields = {
+                    status: { label: 'Status', type: 'select', options: { 'active': 'Active', 'inactive': 'Inactive' } }
+                };
+                const result = generateFormFields(fields);
+                expect(result).toContain('<select id="dynamic-form-field-status"');
+                expect(result).toContain('<option value="active">Active</option>');
+                expect(result).toContain('<option value="inactive">Inactive</option>');
+            });
+
+            it('should generate a checkbox input', () => {
+                const fields = {
+                    isCurrent: { label: 'Is Current?', type: 'checkbox' }
+                };
+                const result = generateFormFields(fields);
+                expect(result).toContain('<label for="dynamic-form-field-isCurrent">Is Current?:</label>');
+                expect(result).toContain('<input type="checkbox" id="dynamic-form-field-isCurrent"');
+            });
+
+            it('should generate a textarea with specific rows', () => {
+                const fields = {
+                    notes: { label: 'Notes', type: 'textarea', rows: 5, placeholder: 'Add notes here' }
+                };
+                const result = generateFormFields(fields);
+                expect(result).toContain('<textarea id="dynamic-form-field-notes"');
+                expect(result).toContain('rows="5"');
+                expect(result).toContain('placeholder="Add notes here"');
+            });
+
+            it('should handle multiple fields correctly', () => {
+                const fields = {
+                    name: { label: 'Name', type: 'text', required: true },
+                    type: { label: 'Type', type: 'select', options: { 'a': 'A', 'b': 'B' } }
+                };
+                const result = generateFormFields(fields);
+                // Check for first field
+                expect(result).toContain('<label for="dynamic-form-field-name"');
+                expect(result).toContain('<input type="text" id="dynamic-form-field-name" required');
+                // Check for second field
+                expect(result).toContain('<label for="dynamic-form-field-type"');
+                expect(result).toContain('<select id="dynamic-form-field-type"');
+                expect(result).toContain('<option value="a">A</option>');
+            });
+
+        });
+
+        // Render results to the page
+        document.getElementById('results').innerHTML = testResults.join('');
+
+    </script>
+</body>
+
+</html>

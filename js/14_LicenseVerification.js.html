@@ -1,0 +1,308 @@
+<script>
+    // =================================================================
+    // 13. LICENSE & VERIFICATION MANAGEMENT HANDLERS
+    // =================================================================
+
+    let currentDetailedVerificationId = null; // State variable to keep track of the verification being viewed
+
+    async function loadProviderLicenses(page = 1) {
+        state.licenses.currentPage = page;
+        const licenseSearch = document.getElementById('licenseSearch');
+        state.licenses.searchTerm = licenseSearch ? licenseSearch.value : ''; // Null check
+        const licenseStatusFilter = document.getElementById('licenseStatusFilter');
+        state.licenses.statusFilter = licenseStatusFilter ? licenseStatusFilter.value : ''; // Null check
+        const licenseStateFilter = document.getElementById('licenseStateFilter');
+        state.licenses.stateFilter = licenseStateFilter ? licenseStateFilter.value : ''; // Null check
+        const licenseTypeFilter = document.getElementById('licenseTypeFilter');
+        state.licenses.typeFilter = licenseTypeFilter ? licenseTypeFilter.value : ''; // Null check
+
+        const providerLicensesTableBody = document.getElementById('providerLicensesTableBody');
+        if (providerLicensesTableBody) { // Null check
+            providerLicensesTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading licenses...</td></tr>';
+        }
+
+        const options = {
+            page: state.licenses.currentPage,
+            pageSize: config.pageSize,
+            searchTerm: state.licenses.searchTerm,
+            status: state.licenses.statusFilter,
+            state: state.licenses.stateFilter,
+            licenseTypeId: state.licenses.typeFilter,
+            sortBy: 'expirationDate',
+            sortOrder: 'asc'
+        };
+
+        try {
+            const response = await api.run('listProviderLicenses', options);
+            if (response.success) {
+                renderProviderLicenses(response.data);
+                renderPagination('providerLicenses', state.licenses.currentPage, config.pageSize, response.totalRecords);
+            } else {
+                showMessage(response.message, true);
+                if (providerLicensesTableBody) { // Null check
+                    providerLicensesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+                const providerLicensesPagination = document.getElementById('providerLicensesPagination');
+                if (providerLicensesPagination) { // Null check
+                    providerLicensesPagination.innerHTML = '';
+                }
+            }
+        } catch (err) {
+            showMessage(err.message, true);
+            if (providerLicensesTableBody) { // Null check
+                providerLicensesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500">${err.message}</td></tr>`;
+            }
+            const providerLicensesPagination = document.getElementById('providerLicensesPagination');
+            if (providerLicensesPagination) { // Null check
+                providerLicensesPagination.innerHTML = '';
+            }
+        }
+    }
+
+    async function viewLicenseVerifications(providerId, licenseId, licenseNumber) {
+        openModal('licenseVerificationsModal');
+        const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+        if (modalLicenseNumber) modalLicenseNumber.textContent = licenseNumber; // Null check
+        // Find the provider in the state to display their name
+        const provider = state.providers.data.find(p => p.id === providerId);
+        const modalLicenseProviderName = document.getElementById('modalLicenseProviderName');
+        if (modalLicenseProviderName) modalLicenseProviderName.textContent = provider ? `${provider.firstName} ${provider.lastName}` : 'Unknown Provider'; // Null check
+
+        const triggerVerificationButton = document.getElementById('triggerVerificationButton');
+        if (triggerVerificationButton) triggerVerificationButton.onclick = () => triggerNewLicenseVerification(providerId, licenseId); // Null check
+
+        const tableBody = document.getElementById('licenseVerificationsTableBody');
+        if (tableBody) { // Null check
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center">Loading verifications...</td></tr>';
+        }
+
+        try {
+            const response = await api.run('listLicenseVerifications', providerId, licenseId);
+            if (response.success) {
+                renderLicenseVerificationsTable(response.data, providerId, licenseId);
+            } else {
+                showMessage(response.message, true);
+                if (tableBody) { // Null check
+                    tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500">${response.message}</td></tr>`;
+                }
+            }
+        } catch (err) {
+            showMessage(err.message, true);
+            if (tableBody) { // Null check
+                tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500">${err.message}</td></tr>`;
+            }
+        }
+    }
+
+    function renderLicenseVerificationsTable(verifications, providerId, licenseId) {
+        const tableBody = document.getElementById('licenseVerificationsTableBody');
+        if (!tableBody) return; // Ensure tableBody exists
+
+        tableBody.innerHTML = '';
+
+        if (!verifications || verifications.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500">No verifications found for this license.</td></tr>';
+            return;
+        }
+
+        verifications.forEach(verification => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = verification.id.substring(0, 8) + '...';
+            row.insertCell().textContent = verification.started ? new Date(verification.started).toLocaleString() : 'N/A';
+            row.insertCell().textContent = verification.status || 'N/A';
+            row.insertCell().textContent = verification.trigger || 'N/A';
+            row.insertCell().textContent = verification.processingTime || 'N/A';
+
+            const actionsCell = row.insertCell();
+            actionsCell.innerHTML = `
+            <button onclick="viewSingleLicenseVerification('${providerId}', '${licenseId}', '${verification.id}')" class="text-blue-500 hover:underline text-xs mr-2">View Details</button>
+        `;
+        });
+    }
+
+    async function triggerNewLicenseVerification(providerId, licenseId) {
+        showConfirmModal(
+            'Trigger Verification',
+            'Are you sure you want to trigger a new verification for this license? This may take some time.',
+            async () => {
+                showMessage('Triggering new license verification...', false);
+                try {
+                    const response = await api.run('triggerLicenseVerification', providerId, licenseId);
+                    if (response.success) {
+                        showMessage(response.message);
+                        // Close the current verifications modal before reopening with updated data
+                        closeModal('licenseVerificationsModal');
+                        // Re-load the list of verifications for this license
+                        const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+                        const licenseNumber = modalLicenseNumber ? modalLicenseNumber.textContent : ''; // Null check
+                        viewLicenseVerifications(providerId, licenseId, licenseNumber);
+                        // Also refresh the main licenses tab
+                        loadProviderLicenses(state.licenses.currentPage);
+                    } else {
+                        showMessage(response.message, true);
+                    }
+                } catch (err) {
+                    showMessage(err.message, true);
+                }
+            }
+        );
+    }
+
+    async function viewSingleLicenseVerification(providerId, licenseId, verificationId) {
+        openModal('singleLicenseVerificationModal');
+        const singleVerificationId = document.getElementById('singleVerificationId');
+        if (singleVerificationId) singleVerificationId.textContent = verificationId.substring(0, 8) + '...'; // Null check
+        const singleVerificationDetailsContent = document.getElementById('singleVerificationDetailsContent');
+        if (singleVerificationDetailsContent) singleVerificationDetailsContent.innerHTML = '<p class="text-center">Loading verification details...</p>'; // Null check
+        currentDetailedVerificationId = verificationId; // Store ID for resolution
+
+        try {
+            const response = await api.run('getLicenseVerification', providerId, licenseId, verificationId);
+            if (response.success) {
+                const verification = response.data;
+
+                // Populate static details
+                const detailLicenseId = document.getElementById('detailLicenseId');
+                if (detailLicenseId) detailLicenseId.textContent = verification.licenseId;
+                const detailProviderId = document.getElementById('detailProviderId');
+                if (detailProviderId) detailProviderId.textContent = verification.providerId;
+                const detailStatus = document.getElementById('detailStatus');
+                if (detailStatus) detailStatus.textContent = verification.status;
+                const detailOriginalStatus = document.getElementById('detailOriginalStatus');
+                if (detailOriginalStatus) detailOriginalStatus.textContent = verification.originalStatus || 'N/A';
+                const detailTrigger = document.getElementById('detailTrigger');
+                if (detailTrigger) detailTrigger.textContent = verification.trigger || 'N/A';
+                const detailStarted = document.getElementById('detailStarted');
+                if (detailStarted) detailStarted.textContent = verification.started ? new Date(verification.started).toLocaleString() : 'N/A';
+                const completedTime = verification.started && verification.processingTime
+                    ? new Date(new Date(verification.started).getTime() + verification.processingTime).toLocaleString()
+                    : (verification.status === 'Completed' || verification.status === 'Found' ? 'N/A (check backend)' : 'N/A'); // Basic attempt to calculate completion if completedAt is missing but time is logged
+                const detailCompleted = document.getElementById('detailCompleted');
+                if (detailCompleted) detailCompleted.textContent = verification.completed ? new Date(verification.completed).toLocaleString() : completedTime;
+                const detailProcessingTime = document.getElementById('detailProcessingTime');
+                if (detailProcessingTime) detailProcessingTime.textContent = verification.processingTime || 'N/A';
+                const detailCorrectResultIndex = document.getElementById('detailCorrectResultIndex');
+                if (detailCorrectResultIndex) detailCorrectResultIndex.textContent = verification.correctResultIndex !== null ? verification.correctResultIndex : 'N/A';
+                const detailFailureReason = document.getElementById('detailFailureReason');
+                if (detailFailureReason) detailFailureReason.textContent = verification.failureReason && verification.failureReason.message ? verification.failureReason.message : 'N/A';
+
+                const detailResultsJson = document.getElementById('detailResultsJson');
+                if (detailResultsJson) detailResultsJson.textContent = verification.results ? JSON.stringify(verification.results, null, 2) : '{}';
+                const detailSourceJson = document.getElementById('detailSourceJson');
+                if (detailSourceJson) detailSourceJson.textContent = verification.verificationSource ? JSON.stringify(verification.verificationSource, null, 2) : '{}';
+
+
+                // Show/hide and populate resolution section
+                const resolveSection = document.getElementById('resolveVerificationSection');
+                if (resolveSection) { // Null check
+                    if (verification.status === 'NeedsReview') {
+                        resolveSection.classList.remove('hidden');
+                        const resolveStatus = document.getElementById('resolveStatus');
+                        if (resolveStatus) resolveStatus.value = ''; // Reset dropdown
+                        const correctResultIndex = document.getElementById('correctResultIndex');
+                        if (correctResultIndex) correctResultIndex.value = ''; // Reset input
+
+                        // Pre-fill if there's a correctResultIndex already
+                        if (verification.correctResultIndex !== null) {
+                             if (correctResultIndex) correctResultIndex.value = verification.correctResultIndex;
+                             if (resolveStatus) resolveStatus.value = verification.status; // Keep current status as initial if editing
+                        }
+
+
+                    } else {
+                        resolveSection.classList.add('hidden');
+                    }
+                }
+
+            } else {
+                showMessage(response.message, true);
+                closeModal('singleLicenseVerificationModal');
+            }
+        } catch (err) {
+            showMessage(err.message, true);
+            closeModal('singleLicenseVerificationModal');
+        }
+    }
+
+
+    async function resolveCurrentVerification() {
+        const verificationId = currentDetailedVerificationId;
+        const resolveStatus = document.getElementById('resolveStatus');
+        const correctIndexInput = document.getElementById('correctResultIndex');
+
+        const newStatus = resolveStatus ? resolveStatus.value : ''; // Null check
+        const correctIndex = correctIndexInput ? correctIndexInput.value : ''; // Null check
+
+        if (!verificationId || !newStatus) {
+            showMessage('Verification ID and a resolved status are required.', true);
+            return;
+        }
+
+        const body = {
+            status: newStatus,
+            correctResultIndex: correctIndex !== '' ? parseInt(correctIndex, 10) : null // Convert to number or null
+        };
+
+        showConfirmModal(
+            'Resolve Verification',
+            `Are you sure you want to resolve this verification to "${newStatus}"?`,
+            async () => {
+                showMessage('Resolving verification...', false);
+                try {
+                    const response = await api.run('resolveLicenseVerificationProblems', verificationId, body);
+                    if (response.success) {
+                        showMessage(response.message);
+                        closeModal('singleLicenseVerificationModal');
+                        // Find necessary IDs to refresh the verifications list for the parent license
+                        const modalLicenseNumber = document.getElementById('modalLicenseNumber');
+                        const licenseNumber = modalLicenseNumber ? modalLicenseNumber.textContent : ''; // Null check
+                        const detailLicenseId = document.getElementById('detailLicenseId');
+                        const licenseId = detailLicenseId ? detailLicenseId.textContent : ''; // Null check
+                         const detailProviderId = document.getElementById('detailProviderId');
+                        const providerId = detailProviderId ? detailProviderId.textContent : ''; // Null check
+
+                        // Refresh the verifications list if that modal is still open
+                         if (document.getElementById('licenseVerificationsModal').style.display === 'block') {
+                             viewLicenseVerifications(providerId, licenseId, licenseNumber);
+                         }
+                        // Refresh the main licenses tab
+                        loadProviderLicenses(state.licenses.currentPage);
+
+                    } else {
+                        showMessage(response.message, true);
+                    }
+                } catch (err) {
+                    showMessage(err.message, true);
+                }
+            }
+        );
+    }
+
+
+    async function loadLicenseTypeFilterDropdown() {
+        const select = document.getElementById('licenseTypeFilter');
+        if (!select) return; // Ensure the element exists
+
+        select.innerHTML = '<option value="">All License Types</option>'; // Default option
+
+        try {
+            const res = await api.run('listSimplifiedLicenseTypes');
+            if (res.success && res.data) {
+                res.data.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.id;
+                    option.textContent = type.name;
+                    select.appendChild(option);
+                });
+            } else {
+                 showMessage(`Failed to load license types for filter: ${res.message}`, true);
+                 select.innerHTML = '<option value="">Error loading types</option>';
+            }
+        } catch (err) {
+             showMessage(`Error loading license types for filter: ${err.message}`, true);
+             select.innerHTML = '<option value="">Error loading types</option>';
+        }
+    }
+
+
+</script>

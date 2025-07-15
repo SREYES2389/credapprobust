@@ -1,0 +1,332 @@
+<script>
+    // =================================================================
+    // 1. STATE MANAGEMENT & CONFIGURATION 
+    // =================================================================
+    const config = {
+        pageSize: 15,
+        searchDebounce: 500,
+    };
+
+    const state = {
+        providers: { data: [], currentPage: 1, totalRecords: 0, sortBy: 'lastName', sortOrder: 'asc', filter: null, searchTerm: '' },
+        facilities: { data: [], currentPage: 1, totalRecords: 0, sortBy: 'name', sortOrder: 'asc', searchTerm: '' },
+        notes: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '' },
+        requests: { data: [], filter: null, searchTerm: '' },
+        monitors: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '' },
+        credentialingRequests: { // New state object for the credentialing tab
+            data: [],
+            currentPage: 1,
+            totalRecords: 0,
+            searchTerm: '',
+            filters: { type: '', priority: '', owner: '', status: '' }
+        },
+        monitors: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '' },
+        reports: { data: [], currentType: null },
+        alerts: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '', statusFilter: 'active' },
+        auditLog: { data: [], currentPage: 1, totalRecords: 0, sortBy: 'timestamp', sortOrder: 'desc', searchTerm: '', typeFilter: '' },
+        groups: { data: [] },
+        users: [],
+        datasetScans: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '' },
+        payers: [],
+        payerPlans: [],
+        webhooks: { data: [] },
+        files: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '' },
+        charts: { providerStatus: null, requestStatus: null },
+        profileImports: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '', statusFilter: '' },
+        importSources: { provider: [], facility: [] }, // To store available import sources
+        licenses: { data: [], currentPage: 1, totalRecords: 0, searchTerm: '', statusFilter: '', stateFilter: '', typeFilter: '' }, // NEW: For the all licenses tab
+        licenseTypes: [], // NEW: To store simplified license types for dropdowns
+        currentUser: { email: '', name: '' }, // NEW
+        myTasks: { data: [], totalRecords: 0 }, // NEW
+        facilityTaxonomies: [], // To store taxonomies for dropdowns
+        requestOwners: [], // For the owner filter dropdown
+    };
+
+    const formSchemas = {
+        // Provider Sub-Entities
+        providerAlias: {
+            title: 'Alias',
+            createApi: 'createProviderAliasInfo',
+            updateApi: 'putProviderAliasInfo',
+            deleteApi: 'deleteProviderAliasInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                firstName: { label: 'First Name', type: 'text', placeholder: 'Jane', required: true },
+                lastName: { label: 'Last Name', type: 'text', placeholder: 'Smith', required: true }
+            }
+        },
+        providerAddress: {
+            title: 'Address',
+            createApi: 'createProviderAddressInfo',
+            updateApi: 'putProviderAddressInfo',
+            deleteApi: 'deleteProviderAddressInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                addressLine1: { label: 'Address Line 1', type: 'text', placeholder: '123 Main St', required: true, colSpan: 2 },
+                addressLine2: { label: 'Address Line 2', type: 'text', placeholder: 'Apt 4B', colSpan: 2 },
+                city: { label: 'City', type: 'text', placeholder: 'Anytown', required: true },
+                state: { label: 'State', type: 'text', placeholder: 'CA', required: true },
+                zipCode: { label: 'Zip Code', type: 'text', placeholder: '12345', required: true },
+                type: { label: 'Type', type: 'select', options: { 'Unspecified': 'Unspecified', 'Home': 'Home', 'Work': 'Work' } }
+            }
+        },
+        providerEmail: {
+            title: 'Email',
+            createApi: 'createProviderEmailInfo',
+            updateApi: 'putProviderEmailInfo',
+            deleteApi: 'deleteProviderEmailInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                email: { label: 'Email Address', type: 'email', placeholder: 'provider@example.com', required: true },
+                type: { label: 'Type', type: 'select', options: { 'Unspecified': 'Unspecified', 'Personal': 'Personal', 'Work': 'Work' } }
+            }
+        },
+        providerEducation: {
+            title: 'Education',
+            createApi: 'createProviderEducationInfo',
+            updateApi: 'patchProviderEducationInfo',
+            deleteApi: 'deleteProviderEducationInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                schoolName: { label: 'School Name', type: 'text', placeholder: 'State University School of Medicine', required: true, colSpan: 2 },
+                degree: { label: 'Degree', type: 'text', placeholder: 'MD', required: true },
+                graduateType: { label: 'Graduate Type', type: 'select', options: { 'Undergraduate': 'Undergraduate', 'Professional': 'Professional', 'FifthPathway': 'Fifth Pathway' } },
+                startDate: { label: 'Start Date', type: 'date' },
+                endDate: { label: 'End Date', type: 'date' }
+            }
+        },
+        providerTraining: {
+            title: 'Training',
+            createApi: 'createProviderTrainingInfo',
+            updateApi: 'patchProviderTrainingInfo',
+            deleteApi: 'deleteProviderTrainingInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                institutionName: { label: 'Institution Name', type: 'text', placeholder: 'General Hospital', required: true, colSpan: 2 },
+                speciality: { label: 'Speciality', type: 'text', placeholder: 'Cardiology', required: true },
+                trainingType: { label: 'Training Type', type: 'select', options: { 'Internship': 'Internship', 'Residency': 'Residency', 'Fellowship': 'Fellowship', 'OtherTraining': 'Other Training' } },
+                startDate: { label: 'Start Date', type: 'date' },
+                endDate: { label: 'End Date', type: 'date' }
+            }
+        },
+        providerWorkHistory: {
+            title: 'Work History',
+            createApi: 'createProviderWorkHistoryInfo',
+            updateApi: 'patchProviderWorkHistoryInfo',
+            deleteApi: 'deleteProviderWorkHistoryInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                name: { label: 'Employer Name', type: 'text', placeholder: 'City Clinic', required: true, colSpan: 2 },
+                jobTitle: { label: 'Job Title', type: 'text', placeholder: 'Physician', required: true },
+                isCurrentEmployer: { label: 'Is Current Employer?', type: 'checkbox' },
+                startDate: { label: 'Start Date', type: 'date' },
+                endDate: { label: 'End Date', type: 'date' }
+            }
+        },
+        providerBoardCertification: {
+            title: 'Board Certification',
+            createApi: 'createBoardCertificationInfo',
+            updateApi: 'patchBoardCertificationInfo',
+            deleteApi: 'deleteBoardCertificationInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                type: { label: 'Board/Type', type: 'text', placeholder: 'American Board of Internal Medicine', required: true, colSpan: 2 },
+                specialty: { label: 'Specialty', type: 'text', placeholder: 'Cardiology', required: true },
+                initialCertificationDate: { label: 'Initial Certification Date', type: 'date' },
+                expirationDate: { label: 'Expiration Date', type: 'date' }
+            }
+        },
+        providerDea: {
+            title: 'DEA Registration',
+            createApi: 'createDeaRegistrationInfo',
+            updateApi: 'patchDeaRegistrationInfo',
+            deleteApi: 'deleteDeaRegistrationInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                registrationNumber: { label: 'Registration Number', type: 'text', placeholder: 'AB1234567', required: true, colSpan: 2 }
+            }
+        },
+        providerCertificate: {
+            title: 'Certificate',
+            createApi: 'createCertificateInfo',
+            updateApi: 'patchCertificateInfo',
+            deleteApi: 'deleteCertificateInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                type: { label: 'Certificate Type', type: 'text', placeholder: 'ACLS', required: true },
+                certificateNumber: { label: 'Certificate Number', type: 'text', placeholder: 'C-12345', required: true },
+                firstName: { label: 'First Name (on cert)', type: 'text' },
+                lastName: { label: 'Last Name (on cert)', type: 'text' },
+                issueDate: { label: 'Issue Date', type: 'date' },
+                expirationDate: { label: 'Expiration Date', type: 'date' },
+                certifyingOrganization: { label: 'Certifying Organization', type: 'text', placeholder: 'American Heart Association', colSpan: 2 }
+            }
+        },
+        providerCaqh: {
+            title: 'CAQH Info',
+            createApi: 'putProviderCaqhInfo',
+            updateApi: 'putProviderCaqhInfo',
+            deleteApi: 'deleteProviderCaqhInfo',
+            deleteIdSource: 'parentId', // Special case: delete API takes providerId
+            refreshFunc: viewProviderDetails,
+            fields: {
+                caqhId: { label: 'CAQH ID', type: 'text', placeholder: '12345678', required: true, colSpan: 2 }
+            }
+        },
+        providerLiabilityInsurance: {
+            title: 'Liability Insurance',
+            createApi: 'createProviderLiabilityInsurance',
+            updateApi: 'patchProviderLiabilityInsuranceInfo',
+            deleteApi: 'deleteProviderLiabilityInsuranceInfo',
+            refreshFunc: viewProviderDetails,
+            fields: {
+                name: { label: 'Insurer Name', type: 'text', placeholder: 'Medical Malpractice Insurers Inc.', required: true, colSpan: 2 },
+                policyNumber: { label: 'Policy Number', type: 'text' },
+                coverageType: { label: 'Coverage Type', type: 'select', options: { 'Individual': 'Individual', 'Shared': 'Shared', 'Occurrence': 'Occurrence', 'ClaimsMade': 'Claims-Made' } },
+                occurrenceCoverageAmount: { label: 'Occurrence Amount', type: 'number', placeholder: '1000000' },
+                aggregateCoverageAmount: { label: 'Aggregate Amount', type: 'number', placeholder: '3000000' },
+                currentEffectiveDate: { label: 'Effective Date', type: 'date' },
+                currentExpirationDate: { label: 'Expiration Date', type: 'date' },
+                isSelfInsured: { label: 'Is Self Insured?', type: 'checkbox' },
+                isUnlimitedCoverage: { label: 'Is Unlimited Coverage?', type: 'checkbox' },
+                includesTailCoverage: { label: 'Includes Tail Coverage?', type: 'checkbox' }
+            }
+        },
+        // Facility Sub-Entities
+        facilityNpi: {
+            title: 'Facility NPI',
+            createApi: 'createFacilityNpiInfo',
+            updateApi: 'patchFacilityNpiInfo',
+            deleteApi: 'deleteFacilityNpiInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                npi: { label: 'NPI Number', type: 'text', placeholder: '1234567890', required: true },
+                isActive: { label: 'Is Active?', type: 'checkbox' }
+            }
+        },
+        facilityDea: {
+            title: 'Facility DEA',
+            createApi: 'createFacilityDeaInfo',
+            updateApi: 'patchFacilityDeaInfo',
+            deleteApi: 'deleteFacilityDeaInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                deaNumber: { label: 'DEA Number', type: 'text', placeholder: 'AB1234567', required: true },
+                state: { label: 'State', type: 'text', placeholder: 'CA' },
+                drugSchedules: { label: 'Drug Schedules (comma-separated)', type: 'text', placeholder: '2, 2N, 3, 3N, 4, 5', colSpan: 2 },
+                expirationDate: { label: 'Expiration Date', type: 'date' },
+                isActive: { label: 'Is Active?', type: 'checkbox' }
+            }
+        },
+        facilityLiabilityInsurance: {
+            title: 'Facility Liability Insurance',
+            createApi: 'createFacilityLiabilityInsuranceInfo',
+            updateApi: 'patchFacilityLiabilityInsuranceInfo',
+            deleteApi: 'deleteFacilityLiabilityInsuranceInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                name: { label: 'Insurer Name', type: 'text', placeholder: 'Medical Malpractice Insurers Inc.', required: true, colSpan: 2 },
+                policyNumber: { label: 'Policy Number', type: 'text' },
+                coverageType: { label: 'Coverage Type', type: 'select', options: { 'Individual': 'Individual', 'Shared': 'Shared', 'Occurrence': 'Occurrence', 'ClaimsMade': 'Claims-Made' } },
+                occurrenceCoverageAmount: { label: 'Occurrence Amount', type: 'number', placeholder: '1000000' },
+                aggregateCoverageAmount: { label: 'Aggregate Amount', type: 'number', placeholder: '3000000' },
+                currentEffectiveDate: { label: 'Effective Date', type: 'date' },
+                currentExpirationDate: { label: 'Expiration Date', type: 'date' }
+            }
+        },
+        facilityAccreditation: {
+            title: 'Facility Accreditation',
+            createApi: 'createFacilityAccreditationInfo',
+            updateApi: 'patchFacilityAccreditationInfo',
+            deleteApi: 'deleteFacilityAccreditationInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                agency: { label: 'Agency', type: 'text', placeholder: 'The Joint Commission', required: true },
+                program: { label: 'Program', type: 'text', placeholder: 'Hospital Accreditation', required: true },
+                decision: { label: 'Decision', type: 'text', placeholder: 'Accredited', colSpan: 2 },
+                effectiveDate: { label: 'Effective Date', type: 'date' },
+                expirationDate: { label: 'Expiration Date', type: 'date' }
+            }
+        },
+        facilityCms: {
+            title: 'CMS Certification',
+            createApi: 'createFacilityCmsCertificationInfo',
+            updateApi: 'patchFacilityCmsCertificationInfo',
+            deleteApi: 'deleteFacilityCmsCertificationInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                certificationNumber: { label: 'Certification Number', type: 'text', placeholder: '123456', required: true },
+                certificationDate: { label: 'Certification Date', type: 'date' }
+            }
+        },
+        facilityMedicareEnrollment: {
+            title: 'Medicare Enrollment',
+            createApi: 'createFacilityMedicareEnrollmentInfo',
+            updateApi: 'patchFacilityMedicareEnrollmentInfo',
+            deleteApi: 'deleteFacilityMedicareEnrollmentInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                medicareNumber: { label: 'Medicare Number', type: 'text', placeholder: 'PTAN', required: true },
+                enrollmentStatus: { label: 'Enrollment Status', type: 'select', options: { 'Active': 'Active', 'Inactive': 'Inactive', 'Pending': 'Pending' } },
+                effectiveDate: { label: 'Effective Date', type: 'date' },
+                terminationDate: { label: 'Termination Date', type: 'date' }
+            }
+        },
+        facilitySpecialty: {
+            title: 'Facility Specialty',
+            createApi: 'createFacilitySpecialty',
+            // No update, it's just a link. Delete and re-add.
+            deleteApi: 'deleteFacilitySpecialty',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                taxonomyId: { label: 'Taxonomy', type: 'select', options: {} } // Options will be populated dynamically
+            }
+        },
+
+        providerQuickNote: {
+            title: 'Quick Note',
+            createApi: 'addProviderNote',
+            refreshFunc: () => { }, // No refresh needed from main list view
+            fields: {
+                note: { label: 'Note', type: 'textarea', rows: 4, placeholder: 'Add a quick note for this provider...', required: true, colSpan: 2 }
+            }
+        },
+        facilityQuickNote: {
+            title: 'Quick Note',
+            createApi: 'addFacilityNote',
+            refreshFunc: () => { }, // No refresh needed from main list view
+            fields: {
+                note: { label: 'Note', type: 'textarea', rows: 4, placeholder: 'Add a quick note for this facility...', required: true, colSpan: 2 }
+            }
+        },
+
+        facilityLicense: {
+            title: 'Facility License',
+            createApi: 'createFacilityLicenseInfo',
+            updateApi: 'patchFacilityLicenseInfo',
+            deleteApi: 'deleteFacilityLicenseInfo',
+            refreshFunc: viewFacilityDetails,
+            fields: {
+                licenseTypeID: { label: 'License Type ID', type: 'text', placeholder: 'e.g., lic-type-hosp', required: true }, // In a real app, this would be a dropdown of FacilityLicenseTypes
+                state: { label: 'State', type: 'text', placeholder: 'CA', required: true },
+                licenseNumber: { label: 'License Number', type: 'text', placeholder: '123456', required: true },
+                licenseStatus: { label: 'Status', type: 'text', placeholder: 'Active' },
+                issueDate: { label: 'Issue Date', type: 'date' },
+                expirationDate: { label: 'Expiration Date', type: 'date' }
+            }
+        },
+        // Credentialing Sub-Entities
+        credentialingChecklistItem: {
+            title: 'Checklist Item',
+            createApi: 'createCredentialingRequestChecklistItem',
+            updateApi: 'patchCredentialingRequestChecklistItem',
+            deleteApi: 'deleteCredentialingRequestChecklistItem',
+            refreshFunc: viewCredentialingRequest,
+            fields: {
+                name: { label: 'Item Name', type: 'text', placeholder: 'Primary License Verified', required: true, colSpan: 2 },
+                status: { label: 'Status', type: 'select', options: { 'Pending': 'Pending', 'Completed': 'Completed', 'Waived': 'Waived', 'NotApplicable': 'Not Applicable' } }
+            }
+        }
+    };
+    let searchTimeout;
+</script>

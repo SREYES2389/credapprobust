@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>Verifiable Data Management</title>
+  <!-- Tailwind CSS CDN for easy styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+    }
+    .container {
+      background-color: #ffffff;
+      padding: 2rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 1200px;
+      margin: 20px auto;
+    }
+    input[type="text"], input[type="number"], input[type="date"], input[type="email"], select, textarea {
+      border: 1px solid #d1d5db;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
+    }
+    button:disabled {
+        background-color: #9ca3af;
+        cursor: not-allowed;
+    }
+    .btn-primary { background-color: #3b82f6; color: #ffffff; }
+    .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
+    .btn-secondary { background-color: #6b7280; color: #ffffff; }
+    .btn-secondary:hover:not(:disabled) { background-color: #4b5563; }
+    .btn-danger { background-color: #ef4444; color: #ffffff; }
+    .btn-danger:hover:not(:disabled) { background-color: #dc2626; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 0.75rem;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+    th {
+      background-color: #f9fafb;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      color: #374151;
+    }
+    tr:nth-child(even) { background-color: #f3f4f6; }
+    .message-box { background-color: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; display: none; }
+    .error-box { background-color: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; display: none; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 900px; border-radius: 0.5rem; position: relative; max-height: 90vh; overflow-y: auto; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+    .tab-link {
+        padding: 0.75rem 1.5rem;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        font-weight: 500;
+        color: #4b5563;
+    }
+    .tab-link.active {
+        border-bottom-color: #3b82f6;
+        color: #1f2937;
+        font-weight: 600;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="container">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Verifiable Data Management</h1>
+
+    <!-- Message and Error Boxes -->
+    <div id="messageBox" class="message-box"></div>
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="flex -mb-px">
+            <button class="tab-link active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab-link" onclick="showTab('providers')">Providers</button>
+            <button class="tab-link" onclick="showTab('facilities')">Facilities</button> 
+            <button class="tab-link" onclick="showTab('groups')">Groups</button>
+            <button class="tab-link" onclick="showTab('payers')">Payers & Enrollments</button>
+            <button class="tab-link" onclick="showTab('requests')">Credentialing</button>
+            <button class="tab-link" onclick="showTab('monitoring')">Monitoring</button>
+            <button class="tab-link" onclick="showTab('reporting')">Reporting & Tools</button>
+            <button class="tab-link" onclick="showTab('webhooks')">Webhooks</button>
+            <button class="tab-link" onclick="showTab('alerts')">Alerts</button>
+            <button class="tab-link" onclick="showTab('files')">Files</button>
+            <button class="tab-link" onclick="showTab('profileImports')">Profile Imports</button>
+            <button class="tab-link" onclick="showTab('licenses')">Licenses & Verifications</button> <!-- NEW TAB BUTTON -->
+        </nav>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard" class="tab-content active">
+        <div class="flex justify-between items-baseline">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Credentialing Dashboard</h2>
+            <div id="welcomeMessage" class="text-lg text-gray-600"></div>
+        </div>
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg cursor-pointer hover:bg-yellow-200 transition" onclick="applyDashboardFilter('dueForRecred')">
+                <div class="flex items-center"><div class="flex-shrink-0"><svg class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div><div class="ml-4"><div class="text-sm font-medium text-yellow-900 uppercase tracking-wider">Due for Re-credentialing</div><div id="metricDueForRecred" class="text-3xl font-bold text-yellow-900">...</div></div></div>
+            </div>
+            <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg cursor-pointer hover:bg-blue-200 transition" onclick="applyDashboardFilter('openRequests')">
+                <div class="flex items-center"><div class="flex-shrink-0"><svg class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div><div class="ml-4"><div class="text-sm font-medium text-blue-900 uppercase tracking-wider">Open Requests</div><div id="metricOpenRequests" class="text-3xl font-bold text-blue-900">...</div></div></div>
+            </div>
+            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg">
+                <div class="flex items-center"><div class="flex-shrink-0"><svg class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg></div><div class="ml-4"><div class="text-sm font-medium text-red-900 uppercase tracking-wider">Active Alerts</div><div id="metricActiveAlerts" class="text-3xl font-bold text-red-900">...</div></div></div>
+            </div>
+            <div class="bg-purple-100 border-l-4 border-purple-500 text-purple-700 p-4 rounded-lg cursor-pointer hover:bg-purple-200 transition" onclick="showTab('requests'); document.getElementById('requestOwnerFilter').value = state.currentUser.email; loadCredentialingRequests(1);">
+                <div class="flex items-center"><div class="flex-shrink-0"><svg class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div><div class="ml-4"><div class="text-sm font-medium text-purple-900 uppercase tracking-wider">My Open Tasks</div><div id="metricMyOpenTasks" class="text-3xl font-bold text-purple-900">...</div></div></div>
+            </div>
+            <div class="bg-gray-200 border-l-4 border-gray-500 text-gray-700 p-4 rounded-lg">
+                <div class="flex items-center"><div class="flex-shrink-0"><svg class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div><div class="ml-4"><div class="text-sm font-medium text-gray-900 uppercase tracking-wider">Unmonitored Licenses</div><div id="metricUnmonitoredLicenses" class="text-3xl font-bold text-gray-900">...</div></div></div>
+            </div>
+        </div>
+        <!-- Task Lists & Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div><h3 class="text-xl font-semibold text-gray-700 mb-2">My Open Tasks</h3><div class="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto"><ul id="listMyTasks" class="space-y-3"><li class="text-gray-500">Loading...</li></ul></div></div>
+            <div><h3 class="text-xl font-semibold text-gray-700 mb-2">Requests Needing Attention</h3><div class="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto"><ul id="listRequestsNeedingReview" class="space-y-3"><li class="text-gray-500">Loading...</li></ul></div></div>
+            <div><h3 class="text-xl font-semibold text-gray-700 mb-4">Provider Status Overview</h3><div class="p-4 bg-white rounded-lg shadow"><canvas id="providerStatusChart"></canvas></div></div>
+            <div><h3 class="text-xl font-semibold text-gray-700 mb-4">Credentialing Request Status</h3><div class="p-4 bg-white rounded-lg shadow"><canvas id="requestStatusChart"></canvas></div></div>
+        </div>
+        <div class="mt-8"><h3 class="text-xl font-semibold text-gray-700 mb-2">Recent Activity</h3><div class="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto"><ul id="listRecentActivity" class="space-y-3"><li class="text-gray-500">Loading...</li></ul></div></div>
+    </div>
+
+    <!-- Providers Tab -->
+    <div id="providers" class="tab-content">
+      <h2 class="text-2xl font-semibold text-gray-700 mb-4">Provider Management</h2>
+      <div class="mb-8 p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Provider</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label for="providerId" class="block text-sm font-medium text-gray-700 mb-1">Provider ID (for Update/Delete):</label><input type="text" id="providerId" placeholder="Auto-generated for new" class="rounded-lg bg-gray-100" readonly></div>
+          <div><label for="firstName" class="block text-sm font-medium text-gray-700 mb-1">First Name:</label><input type="text" id="firstName" placeholder="John" required class="rounded-lg"></div>
+          <div><label for="lastName" class="block text-sm font-medium text-gray-700 mb-1">Last Name:</label><input type="text" id="lastName" placeholder="Doe" required class="rounded-lg"></div>
+          <div><label for="npi" class="block text-sm font-medium text-gray-700 mb-1">NPI (Optional):</label><input type="text" id="npi" placeholder="1234567890" class="rounded-lg"></div>
+          <div><label for="nextCredentialingDate" class="block text-sm font-medium text-gray-700 mb-1">Next Credentialing Date (Optional):</label><input type="date" id="nextCredentialingDate" class="rounded-lg"></div>
+          <div><label for="credentialingStatus" class="block text-sm font-medium text-gray-700 mb-1">Credentialing Status:</label><select id="credentialingStatus" class="rounded-lg"><option value="Data Collection">Data Collection</option><option value="Active">Active</option><option value="Needs Review">Needs Review</option><option value="Expired">Expired</option></select></div>
+          <div class="flex items-center"><input type="checkbox" id="deactivated" class="rounded-md h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"><label for="deactivated" class="ml-2 block text-sm font-medium text-gray-700">Deactivated</label></div>
+        </div>
+        <div class="flex flex-wrap gap-3"><button onclick="addProvider()" class="btn-primary flex-grow">Create New Provider</button><button onclick="updateProvider()" class="btn-secondary flex-grow">Update Provider</button><button onclick="deleteProvider()" class="btn-danger flex-grow">Delete Provider</button><button onclick="clearForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+      </div>
+      <div class="p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Providers</h3>
+        <div class="flex items-center gap-4 mb-4">
+          <div class="flex-grow"><label for="providerSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Providers:</label><input type="text" id="providerSearch" onkeyup="handleSearch('provider')" placeholder="Search by Name, NPI, or ID..." class="rounded-lg w-full"></div>
+          <button id="clearProviderFilterBtn" onclick="clearDashboardFilter('providers')" class="btn-secondary mt-6" style="display: none;">Clear Filter</button>
+        </div>
+        <div id="providerBulkActionControls" class="hidden my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-4"><span id="providerSelectionCount" class="font-semibold text-blue-800">0 selected</span><select id="bulkUpdateStatus" class="rounded-lg"><option value="">-- Select New Status --</option><option value="Data Collection">Data Collection</option><option value="Active">Active</option><option value="Needs Review">Needs Review</option><option value="Expired">Expired</option></select><button onclick="bulkUpdateProviders()" class="btn-primary">Apply Status</button></div>
+        <div class="flex gap-2"><button onclick="loadProviders(1)" class="btn-primary mb-4 w-full md:w-auto">Load/Refresh Providers</button><button onclick="exportListToCsv('provider')" class="btn-secondary mb-4 w-full md:w-auto">Export to CSV</button></div>
+        <div class="overflow-x-auto"><table class="min-w-full"><thead id="providerTableHead"></thead><tbody id="providerTableBody"></tbody></table><div id="providerPagination" class="mt-4 flex justify-between items-center"></div></div>
+      </div>
+    </div>
+
+    <!-- Facilities Tab -->
+    <div id="facilities" class="tab-content">
+      <h2 class="text-2xl font-semibold text-gray-700 mb-4">Facility Management</h2>
+      <div class="mb-8 p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Facility</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label for="facilityId" class="block text-sm font-medium text-gray-700 mb-1">Facility ID (for Update/Delete):</label><input type="text" id="facilityId" placeholder="Auto-generated for new" class="rounded-lg bg-gray-100" readonly></div>
+          <div><label for="facilityName" class="block text-sm font-medium text-gray-700 mb-1">Facility Name:</label><input type="text" id="facilityName" placeholder="General Hospital" required class="rounded-lg"></div>
+          <div><label for="facilityDba" class="block text-sm font-medium text-gray-700 mb-1">DBA (Optional):</label><input type="text" id="facilityDba" class="rounded-lg"></div>
+          <div><label for="facilityAddressLine1" class="block text-sm font-medium text-gray-700 mb-1">Address Line 1:</label><input type="text" id="facilityAddressLine1" class="rounded-lg"></div>
+          <div><label for="facilityAddressLine2" class="block text-sm font-medium text-gray-700 mb-1">Address Line 2:</label><input type="text" id="facilityAddressLine2" class="rounded-lg"></div>
+          <div><label for="facilityCity" class="block text-sm font-medium text-gray-700 mb-1">City:</label><input type="text" id="facilityCity" class="rounded-lg"></div>
+          <div><label for="facilityState" class="block text-sm font-medium text-gray-700 mb-1">State:</label><input type="text" id="facilityState" class="rounded-lg"></div>
+          <div><label for="facilityZipCode" class="block text-sm font-medium text-gray-700 mb-1">Zip Code:</label><input type="text" id="facilityZipCode" class="rounded-lg"></div>
+          <div><label for="facilityPhoneNumber" class="block text-sm font-medium text-gray-700 mb-1">Phone Number:</label><input type="text" id="facilityPhoneNumber" class="rounded-lg"></div>
+          <div><label for="facilityFaxNumber" class="block text-sm font-medium text-gray-700 mb-1">Fax Number:</label><input type="text" id="facilityFaxNumber" class="rounded-lg"></div>
+          <div><label for="facilityContactName" class="block text-sm font-medium text-gray-700 mb-1">Contact Name:</label><input type="text" id="facilityContactName" class="rounded-lg"></div>
+          <div><label for="facilityContactEmail" class="block text-sm font-medium text-gray-700 mb-1">Contact Email:</label><input type="email" id="facilityContactEmail" class="rounded-lg"></div>
+          <div class="flex items-center"><input type="checkbox" id="facilityDeactivated" class="rounded-md h-4 w-4"><label for="facilityDeactivated" class="ml-2 block text-sm font-medium text-gray-700">Deactivated</label></div>
+        </div>
+        <div class="flex flex-wrap gap-3"><button onclick="addFacility()" class="btn-primary flex-grow">Create New Facility</button><button onclick="updateFacility()" class="btn-secondary flex-grow">Update Facility</button><button onclick="deleteFacility()" class="btn-danger flex-grow">Delete Facility</button><button onclick="clearFacilityForm()" class="btn-secondary flex-grow">Clear Facility Form</button></div>
+      </div>
+      <div class="p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Facilities</h3>
+        <div class="mb-4"><label for="facilitySearch" class="block text-sm font-medium text-gray-700 mb-1">Search Facilities:</label><input type="text" id="facilitySearch" onkeyup="handleSearch('facility')" placeholder="Search by Name, City, State, or ID..." class="rounded-lg w-full md:w-1/2"></div>
+        <div class="flex gap-2"><button onclick="loadFacilities(1)" class="btn-primary mb-4 w-full md:w-auto">Load/Refresh Facilities</button><button onclick="exportListToCsv('facility')" class="btn-secondary mb-4 w-full md:w-auto">Export to CSV</button></div>
+        <div class="overflow-x-auto"><table class="min-w-full"><thead id="facilityTableHead"></thead><tbody id="facilitiesTableBody"></tbody></table><div id="facilityPagination" class="mt-4 flex justify-between items-center"></div></div>
+      </div>
+    </div>
+
+    <!-- Groups Tab -->
+    <div id="groups" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Group Management</h2>
+        <div class="mb-8 p-6 border border-gray-200 rounded-lg">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Group</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label for="groupId" class="block text-sm font-medium text-gray-700 mb-1">Group ID:</label><input type="text" id="groupId" class="rounded-lg bg-gray-100" readonly></div>
+                <div><label for="groupName" class="block text-sm font-medium text-gray-700 mb-1">Group Name:</label><input type="text" id="groupName" placeholder="Medical Group LLC" required class="rounded-lg"></div>
+                <div><label for="groupNpi" class="block text-sm font-medium text-gray-700 mb-1">Group NPI:</label><input type="text" id="groupNpi" placeholder="1122334455" class="rounded-lg"></div>
+                <div><label for="groupTaxId" class="block text-sm font-medium text-gray-700 mb-1">Group Tax ID:</label><input type="text" id="groupTaxId" placeholder="12-3456789" class="rounded-lg"></div>
+            </div>
+            <div class="flex flex-wrap gap-3"><button onclick="addGroup()" class="btn-primary flex-grow">Create New Group</button><button onclick="updateGroup()" class="btn-secondary flex-grow">Update Group</button><button onclick="deleteGroup()" class="btn-danger flex-grow">Delete Group</button><button onclick="clearGroupForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Groups</h3>
+            <button onclick="loadGroups()" class="btn-primary mb-4 w-full md:w-auto">Load Groups</button>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>ID</th><th>Name</th><th>NPI</th><th>Tax ID</th><th>Actions</th></tr></thead><tbody id="groupsTableBody"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- Payers & Enrollments Tab -->
+    <div id="payers" class="tab-content">
+        <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Manage Payers</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label for="payerId" class="block text-sm font-medium text-gray-700 mb-1">Payer ID:</label><input type="text" id="payerId" class="rounded-lg bg-gray-100" readonly></div>
+                <div><label for="payerName" class="block text-sm font-medium text-gray-700 mb-1">Payer Name:</label><input type="text" id="payerName" placeholder="Aetna" required class="rounded-lg"></div>
+            </div>
+            <div class="flex flex-wrap gap-3"><button onclick="savePayer()" class="btn-primary flex-grow">Save Payer</button><button onclick="deletePayer()" class="btn-danger flex-grow">Delete Payer</button><button onclick="clearPayerForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+            <h4 class="text-lg font-semibold text-gray-700 mt-6 mb-4">Payers List</h4>
+            <button onclick="loadPayers()" class="btn-primary mb-4 w-full md:w-auto">Load All Payers</button>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>ID</th><th>Name</th><th>Actions</th></tr></thead><tbody id="payersTableBody"></tbody></table></div>
+        </div>
+        <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Manage Payer Plans</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label for="planPayerId" class="block text-sm font-medium text-gray-700 mb-1">Payer ID (Owner):</label><input type="text" id="planPayerId" class="rounded-lg bg-gray-100" readonly></div>
+                <div><label for="planId" class="block text-sm font-medium text-gray-700 mb-1">Plan ID:</label><input type="text" id="planId" class="rounded-lg bg-gray-100" readonly></div>
+                <div><label for="planName" class="block text-sm font-medium text-gray-700 mb-1">Plan Name:</label><input type="text" id="planName" placeholder="HMO Gold" required class="rounded-lg"></div>
+                <div><label for="planState" class="block text-sm font-medium text-gray-700 mb-1">State:</label><input type="text" id="planState" placeholder="CA" class="rounded-lg"></div>
+            </div>
+            <div class="flex flex-wrap gap-3"><button onclick="savePayerPlan()" class="btn-primary flex-grow">Save Plan</button><button onclick="deletePayerPlan()" class="btn-danger flex-grow">Delete Plan</button><button onclick="clearPayerPlanForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+            <h4 class="text-lg font-semibold text-gray-700 mt-6 mb-4">Plans for Selected Payer</h4>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>ID</th><th>Name</th><th>State</th><th>Actions</th></tr></thead><tbody id="payerPlansTableBody"></tbody></table></div>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Manage Provider Enrollments</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <input type="hidden" id="enrollmentId">
+                <div><label for="enrollmentProviderId" class="block text-sm font-medium text-gray-700 mb-1">Provider ID:</label><input type="text" id="enrollmentProviderId" placeholder="Select a provider from main list" class="rounded-lg bg-gray-100" readonly></div>
+                <div><label for="enrollmentGroupId" class="block text-sm font-medium text-gray-700 mb-1">Group:</label><select id="enrollmentGroupId" class="rounded-lg"></select></div>
+                <div><label for="enrollmentPayerPlanId" class="block text-sm font-medium text-gray-700 mb-1">Payer Plan:</label><select id="enrollmentPayerPlanId" class="rounded-lg"></select></div>
+                <div><label for="enrollmentStatus" class="block text-sm font-medium text-gray-700 mb-1">Enrollment Status:</label><select id="enrollmentStatus" class="rounded-lg"><option value="NotSubmitted">Not Submitted</option><option value="Submitted">Submitted</option><option value="Enrolled">Enrolled</option><option value="Denied">Denied</option></select></div>
+                <div><label for="networkStatus" class="block text-sm font-medium text-gray-700 mb-1">Network Status:</label><select id="networkStatus" class="rounded-lg"><option value="None">None</option><option value="Par">Par</option><option value="NonPar">Non-Par</option></select></div>
+                <div><label for="specialistType" class="block text-sm font-medium text-gray-700 mb-1">Specialist Type:</label><select id="specialistType" class="rounded-lg"><option value="None">None</option><option value="Pcp">PCP</option><option value="Specialist">Specialist</option></select></div>
+                <div><label for="effectiveDate" class="block text-sm font-medium text-gray-700 mb-1">Effective Date:</label><input type="date" id="effectiveDate" class="rounded-lg"></div>
+                <div><label for="submissionDate" class="block text-sm font-medium text-gray-700 mb-1">Submission Date:</label><input type="date" id="submissionDate" class="rounded-lg"></div>
+                <div><label for="closedDate" class="block text-sm font-medium text-gray-700 mb-1">Closed Date:</label><input type="date" id="closedDate" class="rounded-lg"></div>
+                <div class="md:col-span-2"><label for="externalProviderPlanId" class="block text-sm font-medium text-gray-700 mb-1">External Provider Plan ID:</label><input type="text" id="externalProviderPlanId" class="rounded-lg"></div>
+                <div class="md:col-span-3"><label for="enrollmentComments" class="block text-sm font-medium text-gray-700 mb-1">Comments:</label><textarea id="enrollmentComments" rows="2" class="rounded-lg"></textarea></div>
+            </div>
+            <div class="flex flex-wrap gap-3"><button onclick="saveProviderEnrollment()" class="btn-primary flex-grow">Save Enrollment</button><button onclick="deleteProviderEnrollment()" class="btn-danger flex-grow">Delete Enrollment</button><button onclick="exportEnrollmentsToCsv()" class="btn-secondary flex-grow">Export to CSV</button><button onclick="clearEnrollmentForm()" class="btn-secondary flex-grow">Clear Form</button></div>
+            <h4 class="text-lg font-semibold text-gray-700 mt-6 mb-4">Enrollments for Selected Provider</h4>
+            <button onclick="loadProviderEnrollments()" class="btn-primary mb-4 w-full md:w-auto">Load Enrollments</button>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>ID</th><th>Payer</th><th>Plan</th><th>Group</th><th>Status</th><th>Effective Date</th><th>Actions</th></tr></thead><tbody id="providerEnrollmentsTableBody"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- Credentialing Tab -->
+    <div id="requests" class="tab-content">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-semibold text-gray-700">Credentialing Requests</h2>
+            <button onclick="openCreateRequestModal()" class="btn-primary">Create New Request</button>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
+            <div><label for="requestSearch" class="block text-sm font-medium text-gray-700 mb-1">Search:</label><input type="text" id="requestSearch" onkeyup="handleSearch('requests')" placeholder="Search by ID, Name, Owner..." class="rounded-lg w-full"></div>
+            <div><label for="requestStatusFilter" class="block text-sm font-medium text-gray-700 mb-1">Status:</label>
+                <select id="requestStatusFilter" onchange="loadCredentialingRequests(1)" class="rounded-lg w-full">
+                    <option value="">All Statuses</option>
+                    <option value="RequestSubmitted">Submitted</option><option value="RequestInProgress">In Progress</option><option value="AdditionalInformationRequested">Addtl. Info Requested</option><option value="Completed">Completed</option><option value="CompletedWithConcern">Completed w/Concern</option>
+                </select>
+            </div>
+            <div><label for="requestPriorityFilter" class="block text-sm font-medium text-gray-700 mb-1">Priority:</label>
+                <select id="requestPriorityFilter" onchange="loadCredentialingRequests(1)" class="rounded-lg w-full">
+                    <option value="">All Priorities</option>
+                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
+                </select>
+            </div>
+            <div><label for="requestOwnerFilter" class="block text-sm font-medium text-gray-700 mb-1">Owner:</label>
+                <select id="requestOwnerFilter" onchange="loadCredentialingRequests(1)" class="rounded-lg w-full">
+                    <option value="">All Owners</option>
+                    <!-- Options populated by JS -->
+                </select>
+            </div>
+            <button id="clearRequestFilterBtn" onclick="clearDashboardFilter('requests')" class="btn-secondary mt-6" style="display: none;">Clear Filter</button>
+        </div>
+        <button onclick="loadCredentialingRequests()" class="btn-primary mb-4 w-full md:w-auto">Load All Requests</button>
+        <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>ID</th><th>Entity ID</th><th>Type</th><th>Status</th><th>Owner</th><th>Created At</th><th>Actions</th></tr></thead><tbody id="credentialingRequestsTableBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Monitoring Tab -->
+    <div id="monitoring" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Monitoring Management</h2>
+
+        <!-- Bulk Actions -->
+        <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Bulk Actions</h3>
+            <p class="text-sm text-gray-600 mb-4">Create standard sanctions & exclusions monitors for all non-deactivated providers who are not already fully monitored.</p>
+            <button onclick="bulkMonitorSanctions()" class="btn-primary">Monitor All Providers for Sanctions</button>
+        </div>
+
+        <!-- Add/Update Monitor -->
+        <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Monitor</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <div><label for="monitorId" class="block text-sm font-medium text-gray-700 mb-1">Monitor ID (for Update/Delete):</label><input type="text" id="monitorId" placeholder="Auto-generated for new" class="rounded-lg bg-gray-100" readonly></div>
+                <div>
+                    <label for="monitorType" class="block text-sm font-medium text-gray-700 mb-1">Type:</label>
+                    <select id="monitorType" class="rounded-lg" onchange="toggleMonitorFields()">
+                        <option value="Dataset">Dataset</option>
+                        <option value="License">License</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="monitorProviderId" class="block text-sm font-medium text-gray-700 mb-1">Provider:</label>
+                    <select id="monitorProviderId" class="rounded-lg"></select>
+                </div>
+                <div id="monitorDatasetTypeContainer">
+                    <label for="monitorDatasetType" class="block text-sm font-medium text-gray-700 mb-1">Dataset Type:</label>
+                    <select id="monitorDatasetType" class="rounded-lg">
+                        <option value="OigExclusions">OIG Exclusions</option>
+                        <option value="Sam">SAM.gov</option>
+                        <option value="StateSanctionsAndExclusions">State Sanctions & Exclusions</option>
+                        <option value="Npdb">NPDB</option>
+                    </select>
+                </div>
+                <div id="monitorLicenseIdContainer" style="display:none;">
+                    <label for="monitorLicenseId" class="block text-sm font-medium text-gray-700 mb-1">License ID:</label>
+                    <input type="text" id="monitorLicenseId" placeholder="Enter License ID" class="rounded-lg">
+                </div>
+                <div>
+                    <label for="monitorInterval" class="block text-sm font-medium text-gray-700 mb-1">Interval:</label>
+                    <select id="monitorInterval" class="rounded-lg">
+                        <option value="Continuous">Continuous</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Quarterly">Quarterly</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="addMonitor()" class="btn-primary flex-grow">Create New Monitor</button>
+                <button onclick="updateMonitor()" class="btn-secondary flex-grow">Update Monitor</button>
+                <button onclick="deleteMonitor()" class="btn-danger flex-grow">Delete Monitor</button>
+                <button onclick="clearMonitorForm()" class="btn-secondary flex-grow">Clear Form</button>
+            </div>
+        </div>
+
+        <!-- Current Monitors -->
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Monitors</h3>
+            <div class="flex items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="monitorSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Monitors:</label>
+                    <input type="text" id="monitorSearch" onkeyup="handleSearch('monitors')" placeholder="Search by ID, Type, Provider, Dataset..." class="rounded-lg w-full">
+                </div>
+                <button onclick="loadMonitors(1)" class="btn-primary mt-6">Load/Refresh Monitors</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Type</th>
+                            <th>Provider</th>
+                            <th>Target</th>
+                            <th>Interval</th>
+                            <th>Next Run</th>
+                            <th>Last Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monitorsTableBody">
+                        <tr><td colspan="8" class="text-center text-gray-500">Click "Load/Refresh Monitors" to view data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="monitorsPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+    </div>
+
+    <!-- Reporting & Tools Tab -->
+    <div id="reporting" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Reporting & Tools</h2>
+        <!-- NEW: Report Generation Section -->
+        <div class="p-6 border border-gray-200 rounded-lg mb-8 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Generate New Report</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label for="reportTypeSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Report Type:</label>
+                    <select id="reportTypeSelect" class="rounded-lg w-full" onchange="updateReportParameterUI()">
+                        <option value="">-- Choose a Report --</option>
+                        <option value="Roster">Provider Roster</option>
+                        <option value="Enrollments" disabled>Enrollments (Coming Soon)</option>
+                        <option value="ExpirableCredentials" disabled>Expirables (Coming Soon)</option>
+                    </select>
+                </div>
+                <!-- Container for dynamic parameters -->
+                <div id="reportParametersContainer" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <!-- Parameter fields will be injected here by JavaScript -->
+                </div>
+            </div>
+            <button onclick="handleGenerateReportClick()" class="btn-primary mt-4 w-full md:w-auto">Generate Report</button>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg mb-4 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Provider Status Report (Raw Data)</h3>
+            <div id="providerStatusReport" class="p-4 bg-gray-50 rounded-lg"><p class="text-gray-500">Loading report...</p></div>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">General Tools</h3>
+            <button onclick="openAllNotesModal()" class="btn-primary">View All Notes</button>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg mt-8 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Start Dataset Scan</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label for="scanProviderSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Provider:</label>
+                    <select id="scanProviderSelect" class="rounded-lg w-full"></select>
+                </div>
+                <div>
+                    <label for="scanDatasetType" class="block text-sm font-medium text-gray-700 mb-1">Dataset Type:</label>
+                    <select id="scanDatasetType" class="rounded-lg w-full">
+                        <option value="OigExclusions">OIG Exclusions</option>
+                        <option value="Sam">SAM.gov</option>
+                        <option value="StateSanctionsAndExclusions">State Sanctions & Exclusions</option>
+                    </select>
+                </div>
+                <button onclick="startScan()" class="btn-primary w-full md:w-auto">Start Scan</button>
+            </div>
+        </div>
+        <div class="p-6 border border-gray-200 rounded-lg mt-8 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Generated Reports</h3>
+            <div class="flex flex-wrap gap-3 mb-4">
+                <button onclick="loadGeneratedReports('Roster')" class="btn-secondary">Load Roster Reports</button>
+                <button onclick="loadGeneratedReports('Enrollments')" class="btn-secondary">Load Enrollments Reports</button>
+                <button onclick="loadGeneratedReports('ExpirableCredentials')" class="btn-secondary">Load Expirables Reports</button>
+                <button onclick="loadGeneratedReports('SanctionsAndExclusions')" class="btn-secondary">Load Sanctions Reports</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Report Type</th>
+                            <th>Status</th>
+                            <th>Completed At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="generatedReportsTableBody"><tr><td colspan="4" class="text-center text-gray-500">Select a report type to load.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="p-5 border border-gray-200 rounded-lg mt-8 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Audit Event Log</h3>
+            <div class="flex flex-wrap items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="auditLogSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Log:</label>
+                    <input type="text" id="auditLogSearch" onkeyup="handleSearch('auditLog')" placeholder="Search message, correlation ID, context..." class="rounded-lg w-full">
+                </div>
+                <div class="flex-grow">
+                    <label for="auditLogTypeFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Type:</label>
+                    <select id="auditLogTypeFilter" onchange="loadEventLogEntries(1)" class="rounded-lg w-full">
+                        <option value="">All Types</option>
+                        <option value="Request">Request</option>
+                        <option value="Error">Error</option>
+                        <option value="System">System</option>
+                        <option value="Legacy">Legacy</option>
+                    </select>
+                </div>
+                <button onclick="loadEventLogEntries(1)" class="btn-primary mt-6">Load/Refresh Log</button>
+            </div>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>Timestamp</th><th>Type</th><th>Message</th><th>Context</th></tr></thead><tbody id="auditLogTableBody"><tr><td colspan="4" class="text-center text-gray-500">Click "Load/Refresh Log" to view audit events.</td></tr></tbody></table></div>
+            <div id="auditLogPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+        <!-- NEW: Dataset Scans Section -->
+        <div class="p-6 border border-gray-200 rounded-lg mt-8 bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Dataset Scans</h3>
+            <div class="flex items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="datasetScanSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Scans:</label>
+                    <input type="text" id="datasetScanSearch" onkeyup="handleSearch('datasetScans')" placeholder="Search by ID, Type, Status, Entity Name..." class="rounded-lg w-full">
+                </div>
+                <button onclick="loadDatasetScans(1)" class="btn-primary mt-6">Load/Refresh Scans</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Type</th><th>Entity</th><th>Status</th><th>Started</th><th>Completed</th><th>Trigger</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="datasetScansTableBody">
+                        <tr><td colspan="8" class="text-center text-gray-500">Click "Load/Refresh Scans" to view data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="datasetScansPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+    </div>
+
+    <!-- Webhooks Tab -->
+    <div id="webhooks" class="tab-content">
+      <h2 class="text-2xl font-semibold text-gray-700 mb-4">Webhook Management</h2>
+      <div class="mb-8 p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Add/Update Webhook</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label for="webhookId" class="block text-sm font-medium text-gray-700 mb-1">Webhook ID (for Update/Delete):</label><input type="text" id="webhookId" placeholder="Auto-generated for new" class="rounded-lg bg-gray-100" readonly></div>
+          <div><label for="webhookType" class="block text-sm font-medium text-gray-700 mb-1">Webhook Type:</label>
+            <select id="webhookType" class="rounded-lg">
+              <option value="">-- Select Type --</option>
+              <option value="LicenseChanged">License Changed</option>
+              <option value="ProviderStatusUpdated">Provider Status Updated</option>
+              <option value="LicenseExpired">License Expired</option>
+              <option value="DatasetMatchFound">Dataset Match Found</option>
+              <option value="CredentialingRequestCompleted">Credentialing Request Completed</option>
+              <option value="All">All Events (if supported)</option>
+            </select>
+          </div>
+          <div class="md:col-span-2"><label for="webhookUrl" class="block text-sm font-medium text-gray-700 mb-1">URL:</label><input type="text" id="webhookUrl" placeholder="https://example.com/webhook" required class="rounded-lg"></div>
+          <div class="md:col-span-2"><label for="webhookSecret" class="block text-sm font-medium text-gray-700 mb-1">Secret (Optional):</label><input type="text" id="webhookSecret" placeholder="A secret string for signature verification" class="rounded-lg"></div>
+          <div class="flex items-center"><input type="checkbox" id="webhookAllowInsecure" class="rounded-md h-4 w-4"><label for="webhookAllowInsecure" class="ml-2 block text-sm font-medium text-gray-700">Allow Insecure URL (http)</label></div>
+          <div class="flex items-center"><input type="checkbox" id="webhookIncludeSensitive" class="rounded-md h-4 w-4"><label for="webhookIncludeSensitive" class="ml-2 block text-sm font-medium text-gray-700">Include Sensitive Info</label></div>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button onclick="addWebhook()" class="btn-primary flex-grow">Create New Webhook</button>
+          <button onclick="updateWebhook()" class="btn-secondary flex-grow">Update Webhook</button>
+          <button onclick="deleteWebhook()" class="btn-danger flex-grow">Delete Webhook</button>
+          <button onclick="clearWebhookForm()" class="btn-secondary flex-grow">Clear Form</button>
+        </div>
+      </div>
+      <div class="p-6 border border-gray-200 rounded-lg">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Current Webhooks</h3>
+        <button onclick="loadWebhooks()" class="btn-primary mb-4 w-full md:w-auto">Load/Refresh Webhooks</button>
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>URL</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="webhookTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div id="profileImports" class="tab-content">
+    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Profile Imports</h2>
+
+    <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Initiate New Profile Import</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label for="importEntityType" class="block text-sm font-medium text-gray-700 mb-1">Entity Type:</label>
+                <select id="importEntityType" class="rounded-lg" onchange="updateImportSourceOptions()">
+                    <option value="">-- Select Entity Type --</option>
+                    <option value="provider">Provider</option>
+                    <option value="facility">Facility</option>
+                </select>
+            </div>
+            <div>
+                <label for="importEntityId" class="block text-sm font-medium text-gray-700 mb-1">Entity ID:</label>
+                <input type="text" id="importEntityId" placeholder="e.g., Provider ID or Facility ID" class="rounded-lg" required>
+            </div>
+            <div>
+                <label for="importSource" class="block text-sm font-medium text-gray-700 mb-1">Import Source:</label>
+                <select id="importSource" class="rounded-lg" disabled>
+                    <option value="">-- Select Source --</option>
+                </select>
+            </div>
+            <div id="importParametersContainer" class="md:col-span-2 grid grid-cols-1 gap-4">
+                <!-- Dynamic input fields for required parameters will be added here -->
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button onclick="initiateProfileImport()" class="btn-primary flex-grow">Initiate Import</button>
+            <button onclick="clearProfileImportForm()" class="btn-secondary flex-grow">Clear Form</button>
+        </div>
+    </div>
+
+    <div class="p-6 border border-gray-200 rounded-lg bg-white">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Recent Profile Imports</h3>
+        <div class="flex items-center gap-4 mb-4">
+            <div class="flex-grow">
+                <label for="profileImportSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Imports:</label>
+                <input type="text" id="profileImportSearch" onkeyup="handleSearch('profileImports')" placeholder="Search by ID, Entity ID, Source..." class="rounded-lg w-full">
+            </div>
+            <div class="flex-grow">
+                <label for="profileImportStatusFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Status:</label>
+                <select id="profileImportStatusFilter" onchange="loadProfileImports(1)" class="rounded-lg w-full">
+                    <option value="">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Working">Working</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Failed">Failed</option>
+                </select>
+            </div>
+            <button onclick="loadProfileImports(1)" class="btn-primary mt-6">Load/Refresh Imports</button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Entity ID</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="profileImportsTableBody">
+                    <tr><td colspan="7" class="text-center text-gray-500">Click "Load/Refresh Imports" to view profile imports.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="profileImportsPagination" class="mt-4 flex justify-between items-center"></div>
+    </div>
+</div>
+
+<!-- Files Tab -->
+    <div id="files" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">File Management</h2>
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <!-- NEW: Bulk Action Controls -->
+            <div id="fileBulkActionControls" class="hidden my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-4">
+                <span id="fileSelectionCount" class="font-semibold text-blue-800">0 selected</span>
+                <button onclick="handleBulkFileDelete()" class="btn-danger">Delete Selected</button>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">All Uploaded Files</h3>
+            <div class="flex items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="fileSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Files:</label>
+                    <input type="text" id="fileSearch" onkeyup="handleSearch('files')" placeholder="Search by filename, ID, or uploader email..." class="rounded-lg w-full">
+                </div>
+                <button onclick="loadFiles(1)" class="btn-primary mt-6">Load/Refresh Files</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" onchange="toggleSelectAll(this, 'filesTableBody', 'file')"></th>
+                            <th>Filename</th>
+                            <th>Linked Entity</th>
+                            <th>Uploaded By</th>
+                            <th>Uploaded At</th>
+                            <th>Size (KB)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filesTableBody"></tbody>
+                </table>
+            </div>
+            <div id="filesPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+    </div>
+
+    <!-- Alerts Tab -->
+    <div id="alerts" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Alert Management</h2>
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <div class="flex flex-wrap items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="alertSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Alerts:</label>
+                    <input type="text" id="alertSearch" onkeyup="handleSearch('alerts')" placeholder="Search by type, entity ID, or name..." class="rounded-lg w-full">
+                </div>
+                <div class="flex-grow">
+                    <label for="alertStatusFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Status:</label>
+                    <select id="alertStatusFilter" onchange="loadAlerts(1)" class="rounded-lg w-full">
+                        <option value="active">Active</option>
+                        <option value="dismissed">Dismissed</option>
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <button onclick="loadAlerts(1)" class="btn-primary mt-6">Load/Refresh Alerts</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr><th>Timestamp</th><th>Type</th><th>Related Entity</th><th>Details</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="alertsTableBody"></tbody>
+                </table>
+            </div>
+            <div id="alertsPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+    </div>
+
+    <!-- NEW: Licenses & Verifications Tab -->
+    <div id="licenses" class="tab-content">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">License & Verification Management</h2>
+
+        <div class="p-6 border border-gray-200 rounded-lg bg-white">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">All Provider Licenses</h3>
+            <div class="flex flex-wrap items-center gap-4 mb-4">
+                <div class="flex-grow">
+                    <label for="licenseSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Licenses:</label>
+                    <input type="text" id="licenseSearch" onkeyup="handleSearch('licenses')" placeholder="Search by number, name, state..." class="rounded-lg w-full">
+                </div>
+                <div class="flex-grow">
+                    <label for="licenseStatusFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Verification Status:</label>
+                    <select id="licenseStatusFilter" onchange="loadProviderLicenses(1)" class="rounded-lg w-full">
+                        <option value="">All Statuses</option>
+                        <option value="Active">Active</option>
+                        <option value="Found">Found</option>
+                        <option value="Pending">Pending</option>
+                        <option value="NeedsReview">Needs Review</option>
+                        <option value="NotFound">Not Found</option>
+                        <option value="Failed">Failed</option>
+                    </select>
+                </div>
+                 <div class="flex-grow">
+                    <label for="licenseStateFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by State:</label>
+                    <input type="text" id="licenseStateFilter" onchange="loadProviderLicenses(1)" placeholder="e.g., CA" class="rounded-lg w-full">
+                </div>
+                 <div class="flex-grow">
+                    <label for="licenseTypeFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Type:</label>
+                    <select id="licenseTypeFilter" onchange="loadProviderLicenses(1)" class="rounded-lg w-full">
+                        <option value="">All Types</option>
+                        <!-- Options populated by JavaScript -->
+                    </select>
+                </div>
+                <button onclick="loadProviderLicenses(1)" class="btn-primary mt-6">Load/Refresh Licenses</button>
+                <button onclick="exportListToCsv('providerLicenses')" class="btn-secondary mt-6">Export Licenses to CSV</button> <!-- NEW EXPORT BUTTON -->
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>License #</th>
+                            <th>Provider</th>
+                            <th>Type</th>
+                            <th>State</th>
+                            <th>Current Status</th>
+                            <th>Issue Date</th>
+                            <th>Expiration Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="providerLicensesTableBody">
+                        <tr><td colspan="8" class="text-center text-gray-500">Click "Load/Refresh Licenses" to view data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="providerLicensesPagination" class="mt-4 flex justify-between items-center"></div>
+        </div>
+    </div>
+
+
+    <!-- MODALS (kept at the end for readability) -->
+    <!-- Custom Confirmation Modal (NEW) -->
+    <div id="customConfirmModal" class="modal">
+        <div class="modal-content max-w-md">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('customConfirmModal')">&times;</span>
+            <h2 id="customConfirmModalTitle" class="text-2xl font-semibold text-gray-700 mb-4">Confirm Action</h2>
+            <p id="customConfirmModalMessage" class="text-gray-700 mb-6"></p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeModal('customConfirmModal')" class="btn-secondary">Cancel</button>
+                <button id="customConfirmModalConfirmBtn" class="btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <!-- Profile Import Details Modal -->
+    <div id="profileImportDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('profileImportDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Profile Import Details: <span id="modalImportId"></span></h2>
+            <div id="profileImportDetailsContent" class="space-y-4">
+                <!-- Details will be injected here by JavaScript -->
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="closeModal('profileImportDetailsModal')" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    <!-- Credentialing Request Details Modal -->
+    <div id="credentialingRequestModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('credentialingRequestModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Credentialing Request Details</h2>
+            <div id="requestDetailsContent" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div><strong>Request ID:</strong> <span id="modalRequestId"></span></div>
+                <div><strong>Provider/Facility ID:</strong> <span id="modalEntityId"></span></div>
+                <div><strong>Type:</strong> <span id="modalRequestType"></span></div>
+                <div><strong>Priority:</strong> <span id="modalRequestPriority"></span></div>
+                <div><strong>Status:</strong> <span id="modalRequestStatus"></span></div>
+                <div class="flex items-center gap-2"><strong>Owner:</strong><select id="modalRequestOwner" class="text-sm p-1 rounded-md"></select><button id="assignOwnerBtn" class="btn-primary text-xs px-2 py-1">Assign</button></div>
+                <div><strong>Created At:</strong> <span id="modalRequestCreatedAt"></span></div>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Event History</h3>
+            <div class="overflow-x-auto max-h-60"><table class="min-w-full"><thead><tr><th>Timestamp</th><th>Status</th><th>User</th><th>Note</th></tr></thead><tbody id="requestEventsTableBody"></tbody></table></div>
+            
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-2">Notes</h3>
+            <div id="requestNotesContainer" class="space-y-3 max-h-48 overflow-y-auto bg-gray-50 p-3 rounded-lg border mb-4">
+                <p class="text-gray-500">No notes yet.</p>
+            </div>
+            <div class="mt-2">
+                <label for="newRequestNote" class="block text-sm font-medium text-gray-700 mb-1">Add a new note:</label>
+                <textarea id="newRequestNote" rows="3" class="w-full rounded-lg" placeholder="Type your note here..."></textarea>
+                <button id="addRequestNoteBtn" class="btn-primary mt-2">Add Note</button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mb-2 mt-6">Checklist</h3>
+            <div class="overflow-x-auto max-h-60"><table class="min-w-full"><thead><tr><th>Item</th><th>Status</th><th>Confirmed By</th><th>Confirmed At</th><th>Actions</th></tr></thead><tbody id="requestChecklistTableBody"></tbody></table></div>
+            <div class="mt-6 text-right"><button onclick="closeModal('credentialingRequestModal')" class="btn-secondary">Close</button></div>
+        </div>
+    </div>
+    <!-- Create Credentialing Request Modal -->
+    <div id="createRequestModal" class="modal">
+        <div class="modal-content max-w-lg">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('createRequestModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Create New Credentialing Request</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="newReqEntityType" class="block text-sm font-medium text-gray-700 mb-1">Entity Type:</label>
+                    <select id="newReqEntityType" onchange="toggleNewRequestEntitySelect()" class="rounded-lg w-full">
+                        <option value="provider">Provider</option>
+                        <option value="facility">Facility</option>
+                    </select>
+                </div>
+                <div id="newReqProviderContainer">
+                    <label for="newReqProviderSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Provider:</label>
+                    <select id="newReqProviderSelect" class="rounded-lg w-full"></select>
+                </div>
+                <div id="newReqFacilityContainer" style="display:none;">
+                    <label for="newReqFacilitySelect" class="block text-sm font-medium text-gray-700 mb-1">Select Facility:</label>
+                    <select id="newReqFacilitySelect" class="rounded-lg w-full"></select>
+                </div>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="saveRequestFromScratch()" class="btn-primary">Create Request</button>
+            </div>
+        </div>
+    </div>
+    <!-- Edit Note Modal -->
+    <div id="editNoteModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('editNoteModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Edit Note</h2>
+            <input type="hidden" id="editNoteId">
+            <div><label for="editNoteText" class="block text-sm font-medium text-gray-700 mb-1">Note Content:</label><textarea id="editNoteText" class="w-full text-sm" rows="5"></textarea></div>
+            <div class="mt-4"><button onclick="toggleNoteHistory()" class="text-blue-600 hover:underline text-sm">View History</button><div id="noteHistoryContainer" class="hidden mt-2 p-3 bg-gray-50 border rounded-lg max-h-60 overflow-y-auto"><p class="text-gray-500">Loading history...</p></div></div>
+            <div class="mt-6 text-right"><button onclick="saveEditedNote()" class="btn-primary">Save Changes</button><button onclick="closeModal('editNoteModal')" class="btn-secondary">Cancel</button></div>
+        </div>
+    </div>
+    <!-- Facility Details Modal -->
+    <div id="facilityDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('facilityDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Facility Profile: <span id="modalFacilityName"></span></h2>
+            <div id="facilityDetailsContent" class="space-y-6"></div>
+            <div id="facilityDetailsFooter" class="mt-6 text-right space-x-2"></div>
+        </div>
+    </div>
+    <!-- Provider Details Modal -->
+    <div id="providerDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('providerDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Provider Profile: <span id="modalProviderName"></span></h2>
+            <div id="providerDetailsContent" class="space-y-6"></div>
+            <div id="providerDetailsFooter" class="mt-6 text-right space-x-2"></div>
+        </div>
+    </div>
+    <!-- File Details Modal -->
+    <div id="fileDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('fileDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">File Details: <span id="modalFileName"></span></h2>
+            <div id="fileDetailsContent" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div><strong>File ID:</strong> <span id="modalFileId"></span></div>
+                    <div><strong>Size:</strong> <span id="modalFileSize"></span> KB</div>
+                    <div><strong>Created At:</strong> <span id="modalFileCreatedAt"></span></div>
+                    <div><strong>Created By:</strong> <span id="modalFileCreatedBy"></span></div>
+                    <div class="md:col-span-2"><strong>Path:</strong> <a id="modalFilePath" href="#" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline break-all"></a></div>
+                    <div class="md:col-span-2"><strong>Linked To:</strong> <span id="modalFileLinkedEntity"></span></div>
+                </div>
+                <div id="modalFilePreview" class="mt-4 p-2 border rounded-lg bg-gray-50 max-h-96 overflow-auto"><p class="text-gray-500">No preview available.</p></div>
+            </div>
+            <div class="mt-6 text-right"><button onclick="closeModal('fileDetailsModal')" class="btn-secondary">Close</button></div>
+        </div>
+    </div>
+    <!-- All Notes Modal -->
+    <div id="allNotesModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('allNotesModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">All Notes</h2>
+            <div class="mb-4"><label for="allNotesSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Notes:</label><input type="text" id="allNotesSearch" onkeyup="handleSearch('notes')" placeholder="Search by content, user, or entity ID..." class="rounded-lg w-full md:w-1/2"></div>
+            <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>Timestamp</th><th>Entity</th><th>Note</th><th>User</th><th>Actions</th></tr></thead><tbody id="allNotesTableBody"></tbody></table></div>
+            <div id="allNotesPagination" class="mt-4 flex justify-between items-center"></div>
+            <div class="mt-6 text-right">
+                <button onclick="exportListToCsv('notes')" class="btn-secondary">Export Notes to CSV</button> <!-- ADDED EXPORT BUTTON -->
+                <button onclick="closeModal('allNotesModal')" class="btn-secondary">Close</button>
+                <div class="p-6 border border-gray-200 rounded-lg bg-white">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4">General Tools</h3>
+                    <button onclick="openAllNotesModal()" class="btn-primary">View All Notes</button>
+            </div>
+        </div>
+    </div>
+    <!-- Generic Dynamic Form Modal -->
+    <div id="dynamicFormModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('dynamicFormModal')">&times;</span>
+            <h2 id="dynamicFormModalTitle" class="text-2xl font-semibold text-gray-700 mb-4"></h2>
+            <input type="hidden" id="dynamicFormParentId">
+            <input type="hidden" id="dynamicFormEntityId">
+            <input type="hidden" id="dynamicFormSchemaName">
+            <div id="dynamicFormFieldsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <!-- Form fields will be injected here by JavaScript -->
+            </div>
+            <div class="mt-6 text-right">
+                <button id="dynamicFormSaveBtn" class="btn-primary">Save</button>
+                <button onclick="closeModal('dynamicFormModal')" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+  <!-- Webhook Logs Modal -->
+  <div id="webhookLogsModal" class="modal">
+      <div class="modal-content">
+          <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('webhookLogsModal')">&times;</span>
+          <h2 class="text-2xl font-semibold text-gray-700 mb-4">Webhook Logs for <span id="logModalWebhookId"></span></h2>
+          <div class="overflow-x-auto max-h-96">
+              <table class="min-w-full">
+                  <thead><tr><th>Timestamp</th><th>Status</th><th>Response Status</th><th>Payload</th></tr></thead>
+                  <tbody id="webhookLogsTableBody"></tbody>
+              </table>
+          </div>
+          <div class="mt-6 text-right"><button onclick="closeModal('webhookLogsModal')" class="btn-secondary">Close</button></div>
+      </div>
+  </div>
+
+    <!-- Add/Edit License Modal -->
+    <div id="licenseModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('licenseModal')">&times;</span>
+            <h2 id="licenseModalTitle" class="text-2xl font-semibold text-gray-700 mb-4">Add/Edit License</h2>
+            <input type="hidden" id="licenseModalProviderId">
+            <input type="hidden" id="licenseModalLicenseId">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="licenseModalTypeId" class="block text-sm font-medium text-gray-700 mb-1">License Type:</label>
+                    <select id="licenseModalTypeId" required class="rounded-lg"></select>
+                </div>
+                <div>
+                    <label for="licenseModalNumber" class="block text-sm font-medium text-gray-700 mb-1">License Number:</label>
+                    <input type="text" id="licenseModalNumber" placeholder="123456" required class="rounded-lg">
+                </div>
+                <div>
+                    <label for="licenseModalState" class="block text-sm font-medium text-gray-700 mb-1">State:</label>
+                    <input type="text" id="licenseModalState" placeholder="CA" required class="rounded-lg">
+                </div>
+                <div>
+                    <label for="licenseModalStatus" class="block text-sm font-medium text-gray-700 mb-1">Status (Non-verified):</label>
+                    <input type="text" id="licenseModalStatus" placeholder="Active" class="rounded-lg">
+                </div>
+                <div>
+                    <label for="licenseModalIssueDate" class="block text-sm font-medium text-gray-700 mb-1">Issue Date:</label>
+                    <input type="date" id="licenseModalIssueDate" class="rounded-lg">
+                </div>
+                <div>
+                    <label for="licenseModalExpirationDate" class="block text-sm font-medium text-gray-700 mb-1">Expiration Date:</label>
+                    <input type="date" id="licenseModalExpirationDate" class="rounded-lg">
+                </div>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="saveLicenseFromModal()" class="btn-primary">Save License</button>
+                <button onclick="closeModal('licenseModal')" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payer Details Modal -->
+    <div id="payerDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('payerDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Payer Profile: <span id="modalPayerName"></span></h2>
+            <div id="payerDetailsContent" class="space-y-6"></div>
+            <div id="payerDetailsFooter" class="mt-6 text-right space-x-2"></div>
+        </div>
+    </div>
+   <div id="groupDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('groupDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Group Profile: <span id="modalGroupName"></span></h2>
+            <div id="groupDetailsContent" class="space-y-6"></div>
+            <div id="groupDetailsFooter" class="mt-6 text-right space-x-2"></div>
+        </div>
+    </div>
+    <!-- Group Enrollments Modal -->
+    <div id="groupEnrollmentsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('groupEnrollmentsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Group Enrollments: <span id="modalGroupEnrollmentsName"></span></h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Provider</th>
+                            <th>Payer</th>
+                            <th>Plan</th>
+                            <th>Status</th>
+                            <th>Effective Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groupEnrollmentsTableBody"></tbody>
+                </table>
+            </div>
+            <div id="groupEnrollmentsPagination" class="mt-4 flex justify-between items-center"></div>
+            <div class="mt-6 text-right"><button onclick="closeModal('groupEnrollmentsModal')" class="btn-secondary">Close</button></div>
+        </div>
+    </div>
+
+    <!-- License Verifications Modal -->
+    <div id="licenseVerificationsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('licenseVerificationsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Verifications for License: <span id="modalLicenseNumber"></span> (<span id="modalLicenseProviderName"></span>)</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-700">Verification History</h3>
+                <button id="triggerVerificationButton" class="btn-primary text-sm">Trigger New Verification</button>
+            </div>
+            <div class="overflow-x-auto max-h-96">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Verification ID</th>
+                            <th>Timestamp</th>
+                            <th>Status</th>
+                            <th>Trigger</th>
+                            <th>Processing Time (ms)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="licenseVerificationsTableBody">
+                        <tr><td colspan="6" class="text-center text-gray-500">No verifications found for this license.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="closeModal('licenseVerificationsModal')" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Single License Verification Details Modal -->
+    <div id="singleLicenseVerificationModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('singleLicenseVerificationModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Verification Details: <span id="singleVerificationId"></span></h2>
+            <div id="singleVerificationDetailsContent" class="space-y-4 text-sm">
+                <div><strong>License ID:</strong> <span id="detailLicenseId"></span></div>
+                <div><strong>Provider ID:</strong> <span id="detailProviderId"></span></div>
+                <div><strong>Status:</strong> <span id="detailStatus"></span></div>
+                <div><strong>Original Status:</strong> <span id="detailOriginalStatus"></span></div>
+                <div><strong>Trigger:</strong> <span id="detailTrigger"></span></div>
+                <div><strong>Started:</strong> <span id="detailStarted"></span></div>
+                <div><strong>Completed (Simulated):</strong> <span id="detailCompleted"></span></div>
+                <div><strong>Processing Time:</strong> <span id="detailProcessingTime"></span> ms</div>
+                <div><strong>Correct Result Index:</strong> <span id="detailCorrectResultIndex"></span></div>
+                <div><strong>Failure Reason:</strong> <span id="detailFailureReason"></span></div>
+                <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold mb-2">Results (JSON)</h4>
+                    <pre id="detailResultsJson" class="whitespace-pre-wrap break-all text-xs max-h-48 overflow-auto"></pre>
+                </div>
+                 <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold mb-2">Verification Source (JSON)</h4>
+                    <pre id="detailSourceJson" class="whitespace-pre-wrap break-all text-xs max-h-24 overflow-auto"></pre>
+                </div>
+            </div>
+            <div id="resolveVerificationSection" class="mt-6 p-4 border border-yellow-300 bg-yellow-50 rounded-lg hidden">
+                <h3 class="text-lg font-semibold text-yellow-800 mb-2">Resolve "Needs Review"</h3>
+                <p class="text-sm text-yellow-700 mb-3">If this verification is in "NeedsReview" status, you can manually set its resolved status and select the correct result if multiple were found.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="resolveStatus" class="block text-sm font-medium text-gray-700 mb-1">Resolved Status:</label>
+                        <select id="resolveStatus" class="rounded-lg w-full">
+                            <option value="">-- Select Status --</option>
+                            <option value="Found">Found</option>
+                            <option value="NotFound">Not Found</option>
+                            <option value="Failed">Failed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="correctResultIndex" class="block text-sm font-medium text-gray-700 mb-1">Correct Result Index (0-based):</label>
+                        <input type="number" id="correctResultIndex" placeholder="e.g., 0 for first result" class="rounded-lg w-full">
+                    </div>
+                </div>
+                <div class="mt-4 text-right">
+                    <button onclick="resolveCurrentVerification()" class="btn-primary text-sm">Resolve Verification</button>
+                </div>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="closeModal('singleLicenseVerificationModal')" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    <!-- NEW: Scan Details Modal -->
+    <div id="scanDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="absolute top-2 right-4 text-2xl font-bold cursor-pointer" onclick="closeModal('scanDetailsModal')">&times;</span>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Scan Details: <span id="modalScanId"></span></h2>
+            <div id="scanDetailsContent" class="space-y-4 text-sm mb-6">
+                <!-- Scan details will be injected here -->
+            </div>
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Matches Found</h3>
+            <div class="overflow-x-auto max-h-80">
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Match ID</th><th>Relevance</th><th>Resolution</th><th>Action Needed</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="datasetMatchesTableBody">
+                        <tr><td colspan="5" class="text-center text-gray-500">Loading matches...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="closeModal('scanDetailsModal')" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <?!= HtmlService.createHtmlOutputFromFile('JavaScript').getContent(); ?>
+           
+</body>
+</html>
